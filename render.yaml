@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: go-hackathon
+    runtime: go
+    buildCommand: go build -o hackathon .
+    startCommand: ./hackathon
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: hackathon-db
+          property: connectionString
+
+databases:
+  - name: hackathon-db
+    plan: free

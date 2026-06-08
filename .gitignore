@@ -1,1 +1,4 @@
 hackathon
+*.exe
+*.env
+.env
