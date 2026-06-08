@@ -12,6 +12,7 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// ── MODELS ────────────────────────────────────────────────
 type Question struct {
 	ID          int    `json:"id"`
 	Title       string `json:"title"`
@@ -22,6 +23,34 @@ type Question struct {
 	HintText    string `json:"hint_text"`
 }
 
+type Submission struct {
+	ID          int       `json:"id"`
+	QuestionID  int       `json:"question_id"`
+	AuthorName  string    `json:"author_name"`
+	Code        string    `json:"code"`
+	Language    string    `json:"language"`
+	Notes       string    `json:"notes"`
+	AvgRating   float64   `json:"avg_rating"`
+	ReviewCount int       `json:"review_count"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type Review struct {
+	ID           int       `json:"id"`
+	SubmissionID int       `json:"submission_id"`
+	ReviewerName string    `json:"reviewer_name"`
+	Rating       int       `json:"rating"`
+	Comment      string    `json:"comment"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+type Contributor struct {
+	AuthorName      string  `json:"author_name"`
+	SubmissionCount int     `json:"submission_count"`
+	AvgRating       float64 `json:"avg_rating"`
+	TotalReviews    int     `json:"total_reviews"`
+}
+
 var db *sql.DB
 
 // ── DB SETUP ──────────────────────────────────────────────
@@ -30,25 +59,21 @@ func initDB() error {
 	if dsn == "" {
 		return fmt.Errorf("DATABASE_URL environment variable not set")
 	}
-
 	var err error
 	db, err = sql.Open("postgres", dsn)
 	if err != nil {
 		return fmt.Errorf("opening db: %w", err)
 	}
-
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(5)
 	db.SetConnMaxLifetime(5 * time.Minute)
-
 	if err := db.Ping(); err != nil {
 		return fmt.Errorf("pinging db: %w", err)
 	}
-
-	return createTable()
+	return createTables()
 }
 
-func createTable() error {
+func createTables() error {
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS questions (
 			id          SERIAL PRIMARY KEY,
@@ -58,13 +83,31 @@ func createTable() error {
 			category    TEXT NOT NULL DEFAULT 'General',
 			hint_url    TEXT NOT NULL DEFAULT 'https://pkg.go.dev',
 			hint_text   TEXT NOT NULL DEFAULT 'Go documentation'
-		)
+		);
+
+		CREATE TABLE IF NOT EXISTS submissions (
+			id          SERIAL PRIMARY KEY,
+			question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+			author_name TEXT NOT NULL,
+			code        TEXT NOT NULL,
+			language    TEXT NOT NULL DEFAULT 'go',
+			notes       TEXT NOT NULL DEFAULT '',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS reviews (
+			id            SERIAL PRIMARY KEY,
+			submission_id INTEGER NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+			reviewer_name TEXT NOT NULL,
+			rating        INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+			comment       TEXT NOT NULL DEFAULT '',
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
 	`)
 	if err != nil {
-		return fmt.Errorf("creating table: %w", err)
+		return fmt.Errorf("creating tables: %w", err)
 	}
 
-	// Seed only if empty
 	var count int
 	db.QueryRow(`SELECT COUNT(*) FROM questions`).Scan(&count)
 	if count == 0 {
@@ -96,111 +139,292 @@ func seedQuestions() error {
 		{Title: "Goroutines: Parallel File Processing", Description: "Given a slice of 5 filenames, process each file concurrently using goroutines. Each goroutine should read the file and send its word count to a channel. The main goroutine collects all results and prints a summary. Use sync.WaitGroup OR a done channel to know when all are finished.", Difficulty: "hard", Category: "Concurrency", HintURL: "https://go.dev/tour/concurrency/1", HintText: "Go goroutines and channels tour"},
 		{Title: "Full Pipeline: go-reloaded Mini", Description: "FINAL BOSS: Build a mini version of go-reloaded that handles ONLY these three transformations: (hex), (bin), and (up). Accept input/output filenames from os.Args. Read the input file, apply all three transformations in a single pass over the token slice, write the result. All edge cases handled.", Difficulty: "hard", Category: "Full Project", HintURL: "https://pkg.go.dev/strings", HintText: "Combine os, strings, strconv packages"},
 	}
-
 	for _, q := range seeds {
-		_, err := db.Exec(`
-			INSERT INTO questions (title, description, difficulty, category, hint_url, hint_text)
-			VALUES ($1, $2, $3, $4, $5, $6)
-		`, q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText)
+		_, err := db.Exec(`INSERT INTO questions (title, description, difficulty, category, hint_url, hint_text) VALUES ($1,$2,$3,$4,$5,$6)`,
+			q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText)
 		if err != nil {
-			return fmt.Errorf("seeding question %q: %w", q.Title, err)
+			return fmt.Errorf("seeding %q: %w", q.Title, err)
 		}
 	}
 	log.Printf("✓ Seeded %d questions", len(seeds))
 	return nil
 }
 
-// ── HANDLERS ──────────────────────────────────────────────
+// ── QUESTIONS ─────────────────────────────────────────────
 func handleQuestions(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		rows, err := db.Query(`SELECT id, title, description, difficulty, category, hint_url, hint_text FROM questions ORDER BY id`)
+		rows, err := db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text FROM questions ORDER BY id`)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), 500)
 			return
 		}
 		defer rows.Close()
-
-		var questions []Question
+		var qs []Question
 		for rows.Next() {
 			var q Question
-			if err := rows.Scan(&q.ID, &q.Title, &q.Description, &q.Difficulty, &q.Category, &q.HintURL, &q.HintText); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			questions = append(questions, q)
+			rows.Scan(&q.ID, &q.Title, &q.Description, &q.Difficulty, &q.Category, &q.HintURL, &q.HintText)
+			qs = append(qs, q)
 		}
-		if questions == nil {
-			questions = []Question{}
+		if qs == nil {
+			qs = []Question{}
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(questions)
+		json.NewEncoder(w).Encode(qs)
 
 	case http.MethodPost:
 		var q Question
 		if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
-			http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "invalid JSON", 400)
 			return
 		}
 		if q.Title == "" || q.Description == "" {
-			http.Error(w, "title and description are required", http.StatusBadRequest)
+			http.Error(w, "title and description required", 400)
 			return
 		}
-		if q.Difficulty == "" { q.Difficulty = "medium" }
-		if q.Category == ""   { q.Category = "General" }
-		if q.HintURL == ""    { q.HintURL = "https://pkg.go.dev" }
-		if q.HintText == ""   { q.HintText = "Go documentation" }
-
-		err := db.QueryRow(`
-			INSERT INTO questions (title, description, difficulty, category, hint_url, hint_text)
-			VALUES ($1, $2, $3, $4, $5, $6)
-			RETURNING id
-		`, q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText).Scan(&q.ID)
+		if q.Difficulty == "" {
+			q.Difficulty = "medium"
+		}
+		if q.Category == "" {
+			q.Category = "General"
+		}
+		if q.HintURL == "" {
+			q.HintURL = "https://pkg.go.dev"
+		}
+		if q.HintText == "" {
+			q.HintText = "Go documentation"
+		}
+		err := db.QueryRow(`INSERT INTO questions (title,description,difficulty,category,hint_url,hint_text) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+			q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText).Scan(&q.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), 500)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(201)
 		json.NewEncoder(w).Encode(q)
 
 	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", 405)
 	}
 }
 
 func handleDeleteQuestion(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, "method not allowed", 405)
 		return
 	}
-	var payload struct {
+	var p struct {
 		ID int `json:"id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "invalid JSON", 400)
 		return
 	}
-	result, err := db.Exec(`DELETE FROM questions WHERE id = $1`, payload.ID)
+	res, err := db.Exec(`DELETE FROM questions WHERE id=$1`, p.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), 500)
 		return
 	}
-	n, _ := result.RowsAffected()
+	n, _ := res.RowsAffected()
 	if n == 0 {
-		http.Error(w, "question not found", http.StatusNotFound)
+		http.Error(w, "not found", 404)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(204)
 }
 
+// ── SUBMISSIONS ───────────────────────────────────────────
+func handleSubmissions(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		qid := r.URL.Query().Get("question_id")
+		var rows *sql.Rows
+		var err error
+		if qid != "" {
+			rows, err = db.Query(`
+				SELECT s.id, s.question_id, s.author_name, s.code, s.language, s.notes, s.created_at,
+				       COALESCE(AVG(rv.rating),0) as avg_rating,
+				       COUNT(rv.id) as review_count
+				FROM submissions s
+				LEFT JOIN reviews rv ON rv.submission_id = s.id
+				WHERE s.question_id = $1
+				GROUP BY s.id
+				ORDER BY avg_rating DESC, s.created_at ASC`, qid)
+		} else {
+			rows, err = db.Query(`
+				SELECT s.id, s.question_id, s.author_name, s.code, s.language, s.notes, s.created_at,
+				       COALESCE(AVG(rv.rating),0) as avg_rating,
+				       COUNT(rv.id) as review_count
+				FROM submissions s
+				LEFT JOIN reviews rv ON rv.submission_id = s.id
+				GROUP BY s.id
+				ORDER BY avg_rating DESC, s.created_at ASC`)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		defer rows.Close()
+		var subs []Submission
+		for rows.Next() {
+			var s Submission
+			rows.Scan(&s.ID, &s.QuestionID, &s.AuthorName, &s.Code, &s.Language, &s.Notes, &s.CreatedAt, &s.AvgRating, &s.ReviewCount)
+			subs = append(subs, s)
+		}
+		if subs == nil {
+			subs = []Submission{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(subs)
+
+	case http.MethodPost:
+		var s Submission
+		if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
+			http.Error(w, "invalid JSON", 400)
+			return
+		}
+		if s.QuestionID == 0 || s.AuthorName == "" || s.Code == "" {
+			http.Error(w, "question_id, author_name and code required", 400)
+			return
+		}
+		if s.Language == "" {
+			s.Language = "go"
+		}
+		err := db.QueryRow(`INSERT INTO submissions (question_id,author_name,code,language,notes) VALUES ($1,$2,$3,$4,$5) RETURNING id,created_at`,
+			s.QuestionID, s.AuthorName, s.Code, s.Language, s.Notes).Scan(&s.ID, &s.CreatedAt)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		json.NewEncoder(w).Encode(s)
+
+	default:
+		http.Error(w, "method not allowed", 405)
+	}
+}
+
+func handleDeleteSubmission(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	var p struct {
+		ID int `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		http.Error(w, "invalid JSON", 400)
+		return
+	}
+	res, err := db.Exec(`DELETE FROM submissions WHERE id=$1`, p.ID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		http.Error(w, "not found", 404)
+		return
+	}
+	w.WriteHeader(204)
+}
+
+// ── REVIEWS ───────────────────────────────────────────────
+func handleReviews(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		sid := r.URL.Query().Get("submission_id")
+		if sid == "" {
+			http.Error(w, "submission_id required", 400)
+			return
+		}
+		rows, err := db.Query(`SELECT id,submission_id,reviewer_name,rating,comment,created_at FROM reviews WHERE submission_id=$1 ORDER BY created_at DESC`, sid)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		defer rows.Close()
+		var reviews []Review
+		for rows.Next() {
+			var rv Review
+			rows.Scan(&rv.ID, &rv.SubmissionID, &rv.ReviewerName, &rv.Rating, &rv.Comment, &rv.CreatedAt)
+			reviews = append(reviews, rv)
+		}
+		if reviews == nil {
+			reviews = []Review{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(reviews)
+
+	case http.MethodPost:
+		var rv Review
+		if err := json.NewDecoder(r.Body).Decode(&rv); err != nil {
+			http.Error(w, "invalid JSON", 400)
+			return
+		}
+		if rv.SubmissionID == 0 || rv.ReviewerName == "" || rv.Rating < 1 || rv.Rating > 5 {
+			http.Error(w, "submission_id, reviewer_name and rating(1-5) required", 400)
+			return
+		}
+		err := db.QueryRow(`INSERT INTO reviews (submission_id,reviewer_name,rating,comment) VALUES ($1,$2,$3,$4) RETURNING id,created_at`,
+			rv.SubmissionID, rv.ReviewerName, rv.Rating, rv.Comment).Scan(&rv.ID, &rv.CreatedAt)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		json.NewEncoder(w).Encode(rv)
+
+	default:
+		http.Error(w, "method not allowed", 405)
+	}
+}
+
+// ── LEADERBOARD ───────────────────────────────────────────
+func handleLeaderboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	rows, err := db.Query(`
+		SELECT s.author_name,
+		       COUNT(DISTINCT s.id) as submission_count,
+		       COALESCE(AVG(rv.rating),0) as avg_rating,
+		       COUNT(rv.id) as total_reviews
+		FROM submissions s
+		LEFT JOIN reviews rv ON rv.submission_id = s.id
+		GROUP BY s.author_name
+		ORDER BY avg_rating DESC, submission_count DESC
+	`)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	defer rows.Close()
+	var board []Contributor
+	for rows.Next() {
+		var c Contributor
+		rows.Scan(&c.AuthorName, &c.SubmissionCount, &c.AvgRating, &c.TotalReviews)
+		board = append(board, c)
+	}
+	if board == nil {
+		board = []Contributor{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(board)
+}
+
+// ── CORS + ROUTER ─────────────────────────────────────────
 func withCORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
+			w.WriteHeader(204)
 			return
 		}
 		next(w, r)
@@ -216,6 +440,10 @@ func main() {
 	http.Handle("/", http.FileServer(http.Dir("static")))
 	http.HandleFunc("/api/questions", withCORS(handleQuestions))
 	http.HandleFunc("/api/questions/delete", withCORS(handleDeleteQuestion))
+	http.HandleFunc("/api/submissions", withCORS(handleSubmissions))
+	http.HandleFunc("/api/submissions/delete", withCORS(handleDeleteSubmission))
+	http.HandleFunc("/api/reviews", withCORS(handleReviews))
+	http.HandleFunc("/api/leaderboard", withCORS(handleLeaderboard))
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -225,8 +453,8 @@ func main() {
 	log.Printf("🚀 Server running at http://localhost:%s", port)
 	srv := &http.Server{
 		Addr:         ":" + port,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
 }
