@@ -395,9 +395,9 @@ async function loadQuestions(){
 
 function renderSidebar(){
   const filtered = currentFilter==='all' ? questions : questions.filter(q=>q.difficulty===currentFilter);
-  document.getElementById('questionList').innerHTML = filtered.map(q=>`
+  document.getElementById('questionList').innerHTML = filtered.map((q,i)=>`
     <div class="q-item ${activeId===q.id?'active':''} ${completed.has(q.id)?'completed':''}" onclick="selectQuestion(${q.id})">
-      <div class="q-num">${completed.has(q.id)?'✓':q.id}</div>
+      <div class="q-num">${completed.has(q.id)?'✓':(i+1)}</div>
       <div class="q-info">
         <div class="q-title">${esc(q.title)}</div>
         <div class="q-meta">
@@ -412,11 +412,12 @@ function selectQuestion(id){
   activeId=id; renderSidebar();
   const q = questions.find(q=>q.id===id); if(!q) return;
   const isDone = completed.has(id);
+  const displayNum = questions.findIndex(x=>x.id===id) + 1;
   document.getElementById('detailArea').innerHTML = `
     <div class="detail-card">
       <div class="detail-header">
         <div class="detail-title-group">
-          <div class="detail-number">Question #${q.id}</div>
+          <div class="detail-number">Question #${displayNum}</div>
           <div class="detail-title">${esc(q.title)}</div>
           <div class="detail-badges">
             <span class="badge badge-${q.difficulty}">${q.difficulty}</span>
