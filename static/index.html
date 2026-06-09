@@ -18,19 +18,41 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:var(--font-ui);min-height:100vh;overflow-x:hidden}
 body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
-body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:0}
 .app{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:0 24px}
 
-/* HEADER */
+/* ── AUTH PAGE ── */
+#auth-page{display:flex;align-items:center;justify-content:center;min-height:100vh}
+.auth-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:var(--glow)}
+.auth-logo{font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--accent);text-align:center;margin-bottom:6px}
+.auth-sub{font-family:var(--font-mono);font-size:11px;color:var(--muted);text-align:center;letter-spacing:2px;text-transform:uppercase;margin-bottom:32px}
+.auth-tabs{display:flex;gap:4px;margin-bottom:24px;background:var(--surface);border-radius:8px;padding:4px}
+.auth-tab{flex:1;padding:8px;border-radius:6px;border:none;background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:12px;cursor:pointer;transition:all .2s}
+.auth-tab.active{background:var(--card);color:var(--accent)}
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-family:var(--font-mono);font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.form-input{width:100%;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:13px;outline:none;transition:border-color .2s}
+.form-input:focus{border-color:var(--accent)}
+.btn-primary{width:100%;padding:12px;background:linear-gradient(135deg,var(--accent),#0099cc);border:none;border-radius:8px;color:var(--bg);font-family:var(--font-mono);font-size:13px;font-weight:700;cursor:pointer;transition:opacity .2s;letter-spacing:1px;text-transform:uppercase}
+.btn-primary:hover{opacity:.85}
+.auth-error{color:var(--hard);font-family:var(--font-mono);font-size:12px;margin-top:12px;text-align:center}
+
+/* ── HEADER ── */
 header{display:flex;align-items:center;justify-content:space-between;padding:20px 0 16px;border-bottom:1px solid var(--border);gap:16px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:12px}
 .brand-logo{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--bg);flex-shrink:0}
-.brand-name{font-family:var(--font-mono);font-size:18px;font-weight:700;color:#fff;letter-spacing:-0.5px}
+.brand-name{font-family:var(--font-mono);font-size:18px;font-weight:700;color:#fff;letter-spacing:-.5px}
 .brand-name span{color:var(--accent)}
 .brand-sub{font-size:11px;color:var(--muted);font-family:var(--font-mono);letter-spacing:2px;text-transform:uppercase;margin-top:1px}
+.header-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.user-info{display:flex;align-items:center;gap:10px}
+.user-name{font-family:var(--font-mono);font-size:13px;color:var(--accent2)}
+.user-badge{font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(255,107,53,0.15);color:var(--accent3);border:1px solid rgba(255,107,53,0.3)}
+.answered-count{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.btn-logout{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:11px;cursor:pointer;transition:all .2s}
+.btn-logout:hover{border-color:var(--hard);color:var(--hard)}
 .timer-block{display:flex;flex-direction:column;align-items:center;gap:4px}
 .timer-label{font-family:var(--font-mono);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted)}
-.timer-display{font-family:var(--font-mono);font-size:32px;font-weight:700;letter-spacing:4px;color:var(--accent2);text-shadow:0 0 20px rgba(0,255,157,0.4);transition:color .3s,text-shadow .3s}
+.timer-display{font-family:var(--font-mono);font-size:28px;font-weight:700;letter-spacing:4px;color:var(--accent2);text-shadow:0 0 20px rgba(0,255,157,0.4);transition:color .3s,text-shadow .3s}
 .timer-display.warning{color:var(--warn);text-shadow:0 0 20px rgba(255,204,0,0.4)}
 .timer-display.critical{color:var(--hard);text-shadow:0 0 20px rgba(255,77,109,0.5);animation:pulse-timer 1s infinite}
 @keyframes pulse-timer{0%,100%{opacity:1}50%{opacity:.6}}
@@ -38,13 +60,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:20p
 .timer-btn{padding:3px 10px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-family:var(--font-mono);font-size:10px;cursor:pointer;transition:all .2s}
 .timer-btn:hover{border-color:var(--accent);color:var(--accent)}
 
-/* NAV TABS */
-.nav-tabs{display:flex;gap:4px;padding:16px 0 0;border-bottom:1px solid var(--border)}
+/* ── NAV TABS ── */
+.nav-tabs{display:flex;gap:4px;padding:16px 0 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
 .nav-tab{padding:8px 20px;border-radius:8px 8px 0 0;border:1px solid transparent;border-bottom:none;font-family:var(--font-mono);font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);background:transparent;transition:all .2s;letter-spacing:1px;text-transform:uppercase;position:relative;bottom:-1px}
 .nav-tab:hover{color:var(--text)}
 .nav-tab.active{border-color:var(--border);border-bottom-color:var(--bg);background:var(--bg);color:var(--accent)}
+.notif-dot{display:inline-block;width:7px;height:7px;background:var(--hard);border-radius:50%;margin-left:5px;vertical-align:middle}
 
-/* PROGRESS */
+/* ── PROGRESS ── */
 .progress-section{padding:16px 0;border-bottom:1px solid var(--border)}
 .progress-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .progress-label{font-family:var(--font-mono);font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
@@ -55,14 +78,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:20p
 .stat-pill{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px}
 .stat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 
-/* LAYOUT */
-.main-layout{display:grid;grid-template-columns:300px 1fr;gap:24px;padding:24px 0;min-height:calc(100vh - 260px)}
+/* ── MAIN LAYOUT ── */
+.main-layout{display:grid;grid-template-columns:300px 1fr;gap:24px;padding:24px 0;min-height:calc(100vh - 320px)}
 .sidebar{display:flex;flex-direction:column;gap:12px}
 .sidebar-title{font-family:var(--font-mono);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted)}
 .filter-row{display:flex;gap:6px;flex-wrap:wrap}
 .filter-chip{padding:4px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:10px;cursor:pointer;transition:all .2s;white-space:nowrap}
 .filter-chip:hover,.filter-chip.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,0.05)}
-.question-list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:calc(100vh - 380px);padding-right:4px}
+.question-list{display:flex;flex-direction:column;gap:6px;overflow-y:auto;max-height:calc(100vh - 440px);padding-right:4px}
 .question-list::-webkit-scrollbar{width:4px}
 .question-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 .q-item{padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all .2s;display:flex;align-items:flex-start;gap:10px}
@@ -79,8 +102,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:20p
 .diff-medium{background:rgba(255,204,0,0.1);color:var(--medium)}
 .diff-hard{background:rgba(255,77,109,0.1);color:var(--hard)}
 .cat-tag{font-family:var(--font-mono);font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hidden-tag{font-family:var(--font-mono);font-size:9px;color:var(--muted);opacity:.5;font-style:italic}
 
-/* DETAIL PANE */
+/* ── DETAIL PANE ── */
 .detail-pane{display:flex;flex-direction:column;gap:20px}
 .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:400px;gap:16px;opacity:.4}
 .empty-state-icon{font-size:48px;font-family:var(--font-mono);color:var(--muted)}
@@ -97,644 +121,1081 @@ header{display:flex;align-items:center;justify-content:space-between;padding:20p
 .badge-medium{border-color:var(--medium);color:var(--medium)}
 .badge-hard{border-color:var(--hard);color:var(--hard)}
 .badge-cat{border-color:var(--border);color:var(--muted)}
+.badge-hidden{border-color:var(--muted);color:var(--muted);opacity:.6}
 .detail-actions{display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap}
-.btn{padding:8px 16px;border-radius:8px;border:1px solid;font-family:var(--font-mono);font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-action{padding:8px 16px;border-radius:8px;border:1px solid;font-family:var(--font-mono);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:1px;text-transform:uppercase}
+.btn-hint{border-color:var(--warn);color:var(--warn);background:rgba(255,204,0,0.05)}
+.btn-hint:hover{background:rgba(255,204,0,0.15)}
 .btn-complete{border-color:var(--accent2);color:var(--accent2);background:rgba(0,255,157,0.05)}
-.btn-complete:hover{background:rgba(0,255,157,0.15);box-shadow:var(--glow-green)}
-.btn-complete.done{background:rgba(0,255,157,0.2)}
-.btn-submit-sol{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,0.05)}
-.btn-submit-sol:hover{background:rgba(0,212,255,0.15)}
-.btn-view-sol{border-color:var(--border);color:var(--muted);background:transparent}
-.btn-view-sol:hover{border-color:var(--text);color:var(--text)}
-.btn-delete{border-color:var(--border);color:var(--muted);background:transparent}
-.btn-delete:hover{border-color:var(--hard);color:var(--hard)}
-.detail-body{padding:28px}
-.section-label{font-family:var(--font-mono);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
-.description-text{font-size:15px;line-height:1.75;color:var(--text)}
-.description-text code{font-family:var(--font-mono);font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--accent)}
-.hint-card{margin-top:24px;padding:16px 20px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.2);border-radius:8px;display:flex;align-items:center;gap:12px}
-.hint-icon{font-size:18px;flex-shrink:0}
-.hint-content{flex:1}
-.hint-label{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-.hint-link{font-family:var(--font-mono);font-size:13px;color:var(--accent);text-decoration:none;transition:color .2s}
-.hint-link:hover{color:var(--accent2);text-decoration:underline}
+.btn-complete:hover{background:rgba(0,255,157,0.15)}
+.btn-complete.done{background:rgba(0,255,157,0.15);opacity:.7;cursor:default}
+.btn-submit{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,0.05)}
+.btn-submit:hover{background:rgba(0,212,255,0.15)}
+.btn-danger{border-color:var(--hard);color:var(--hard);background:rgba(255,77,109,0.05)}
+.btn-danger:hover{background:rgba(255,77,109,0.15)}
+.btn-vis{border-color:var(--accent2);color:var(--accent2);background:rgba(0,255,157,0.05)}
+.btn-vis:hover{background:rgba(0,255,157,0.15)}
+.btn-vis.hidden{border-color:var(--muted);color:var(--muted);background:transparent}
+.detail-body{padding:24px 28px}
+.detail-description{font-size:14px;line-height:1.7;color:var(--text)}
+.detail-hint{margin-top:16px;padding:14px 18px;background:rgba(255,204,0,0.05);border:1px solid rgba(255,204,0,0.15);border-radius:8px;display:none}
+.detail-hint.visible{display:block}
+.hint-label{font-family:var(--font-mono);font-size:10px;color:var(--warn);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px}
+.hint-text{font-size:13px;color:var(--text)}
+.hint-link{color:var(--accent);text-decoration:none}
+.hint-link:hover{text-decoration:underline}
 
-/* INLINE TABS (question detail) */
-.inline-tabs{display:flex;gap:4px;margin-top:20px;border-bottom:1px solid var(--border)}
-.inline-tab{padding:6px 16px;font-family:var(--font-mono);font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);background:transparent;border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;transition:all .2s;text-transform:uppercase;letter-spacing:1px;position:relative;bottom:-1px}
-.inline-tab:hover{color:var(--text)}
-.inline-tab.active{border-color:var(--border);border-bottom-color:var(--card);background:var(--card);color:var(--accent)}
-.inline-tab-content{padding:20px 0 0;display:none}
-.inline-tab-content.active{display:block}
+/* ── TIMER SLOT ── */
+.q-timer{font-family:var(--font-mono);font-size:9px;color:var(--muted);margin-top:2px}
+.q-timer.expiring{color:var(--hard);animation:pulse-timer 1s infinite}
 
-/* SUBMIT FORM */
-.submit-form{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-top:4px}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.form-group{display:flex;flex-direction:column;gap:6px}
-.form-group.full{grid-column:1/-1}
-.form-label{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
-.form-input,.form-select,.form-textarea{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-family:var(--font-ui);font-size:13px;transition:border-color .2s,box-shadow .2s;outline:none;width:100%}
-.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,212,255,0.1)}
-.form-select option{background:var(--surface)}
-.code-textarea{font-family:var(--font-mono);font-size:12px;line-height:1.6;resize:vertical;min-height:180px;tab-size:2}
-.form-textarea{resize:vertical;min-height:80px}
-.form-actions{margin-top:16px;display:flex;justify-content:flex-end;gap:10px}
-.btn-primary{padding:10px 24px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:8px;color:var(--bg);font-family:var(--font-mono);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:1px;text-transform:uppercase}
-.btn-primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,212,255,0.3)}
-.btn-ghost{padding:10px 20px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--muted);font-family:var(--font-mono);font-size:12px;cursor:pointer;transition:all .2s}
-.btn-ghost:hover{border-color:var(--muted);color:var(--text)}
+/* ── SUBMISSION SECTION ── */
+.section-title{font-family:var(--font-mono);font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.submit-form{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.form-select{width:100%;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;outline:none;cursor:pointer}
+.form-select:focus{border-color:var(--accent)}
+textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:1.6}
+.btn-send{padding:10px 24px;background:linear-gradient(135deg,var(--accent),#0099cc);border:none;border-radius:8px;color:var(--bg);font-family:var(--font-mono);font-size:12px;font-weight:700;cursor:pointer;transition:opacity .2s;letter-spacing:1px;text-transform:uppercase}
+.btn-send:hover{opacity:.85}
+.btn-send:disabled{opacity:.4;cursor:not-allowed}
 
-/* SUBMISSIONS LIST */
-.submissions-list{display:flex;flex-direction:column;gap:14px;margin-top:4px}
-.sub-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s}
-.sub-card:hover{border-color:var(--accent)}
-.sub-header{padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer}
-.sub-author{font-family:var(--font-mono);font-size:13px;font-weight:700;color:#fff}
+/* ── SUBMISSIONS LIST ── */
+.submissions-list{display:flex;flex-direction:column;gap:12px}
+.sub-card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;transition:border-color .2s}
+.sub-card:hover{border-color:rgba(0,212,255,0.3)}
+.sub-header{padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:12px}
+.sub-author{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--accent2)}
 .sub-meta{display:flex;align-items:center;gap:10px}
-.sub-lang{font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.1);color:var(--accent);border:1px solid rgba(0,212,255,0.2)}
-.star-display{display:flex;align-items:center;gap:4px}
-.stars{font-size:13px;letter-spacing:1px}
-.rating-num{font-family:var(--font-mono);font-size:12px;color:var(--warn)}
-.review-count{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
-.rank-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;flex-shrink:0}
-.rank-1{background:rgba(255,204,0,0.15);color:var(--warn);border:1px solid rgba(255,204,0,0.3)}
-.rank-2{background:rgba(192,192,192,0.1);color:#c0c0c0;border:1px solid rgba(192,192,192,0.3)}
-.rank-3{background:rgba(205,127,50,0.1);color:#cd7f32;border:1px solid rgba(205,127,50,0.3)}
-.sub-body{padding:0 18px 18px;display:none}
+.sub-lang{font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.08);color:var(--accent);border:1px solid rgba(0,212,255,0.2)}
+.stars{color:var(--warn);font-size:12px;letter-spacing:1px}
+.sub-count{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.sub-body{display:none;padding:0 16px 16px;border-top:1px solid var(--border)}
 .sub-body.open{display:block}
-.code-block{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;overflow-x:auto;margin-bottom:14px}
-.code-block pre{font-family:var(--font-mono);font-size:12px;line-height:1.7;color:#a8d8ea;white-space:pre-wrap;word-break:break-word}
-.sub-notes{font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.6;font-style:italic}
-.sub-date{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-bottom:16px}
+.code-block{background:var(--surface);border-radius:8px;padding:14px;margin-top:12px;font-family:var(--font-mono);font-size:12px;overflow-x:auto;border:1px solid var(--border);white-space:pre}
+.sub-notes{font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5}
+.review-form{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
+.stars-input{display:flex;gap:6px}
+.star-btn{background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted);transition:color .15s;padding:0}
+.star-btn.lit,.star-btn:hover{color:var(--warn)}
+.reviews-list{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.review-item{padding:10px 12px;background:var(--surface);border-radius:6px;border:1px solid var(--border)}
+.review-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.review-author{font-family:var(--font-mono);font-size:11px;color:var(--accent)}
+.review-comment{font-size:12px;color:var(--text);line-height:1.5}
 
-/* REVIEWS */
-.reviews-section{border-top:1px solid var(--border);padding-top:16px}
-.reviews-title{font-family:var(--font-mono);font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
-.review-list{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
-.review-item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 14px}
-.review-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
-.reviewer-name{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text)}
-.review-stars{font-size:12px}
-.review-comment{font-size:13px;color:var(--muted);line-height:1.5}
-.review-date{font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-top:4px}
-.add-review{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px}
-.add-review-title{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
-.star-picker{display:flex;gap:6px;margin-bottom:12px}
-.star-btn{font-size:20px;background:none;border:none;cursor:pointer;color:var(--border);transition:color .15s;padding:0}
-.star-btn.active,.star-btn:hover{color:var(--warn)}
-.no-submissions{text-align:center;padding:40px 20px;font-family:var(--font-mono);font-size:12px;color:var(--muted)}
-
-/* ADD QUESTION PANEL */
-.add-panel{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.panel-header{padding:16px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;transition:background .2s}
-.panel-header:hover{background:rgba(0,212,255,0.03)}
-.panel-title{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--accent);letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;gap:8px}
-.panel-toggle{font-family:var(--font-mono);font-size:14px;color:var(--muted);transition:transform .3s}
-.panel-toggle.open{transform:rotate(45deg)}
-.panel-body{padding:24px;display:none}
-.panel-body.open{display:block}
-
-/* LEADERBOARD */
+/* ── LEADERBOARD ── */
 .leaderboard-page{padding:24px 0}
-.lb-header{margin-bottom:24px}
-.lb-title{font-size:24px;font-weight:700;color:#fff;letter-spacing:-.5px}
-.lb-sub{font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-top:4px}
 .lb-table{width:100%;border-collapse:collapse}
-.lb-table th{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:10px 16px;text-align:left;border-bottom:1px solid var(--border)}
-.lb-table td{padding:14px 16px;border-bottom:1px solid rgba(30,48,72,0.5);font-size:14px}
-.lb-table tr:hover td{background:rgba(0,212,255,0.03)}
-.lb-rank{font-family:var(--font-mono);font-weight:700;font-size:16px}
-.lb-name{font-weight:600;color:#fff}
-.lb-subs{font-family:var(--font-mono);font-size:13px;color:var(--muted)}
-.lb-rating{font-family:var(--font-mono);font-size:14px;color:var(--warn);font-weight:700}
-.lb-reviews{font-family:var(--font-mono);font-size:13px;color:var(--muted)}
-.lb-bar-cell{width:200px}
-.lb-bar-outer{height:6px;background:var(--surface);border-radius:3px;overflow:hidden}
-.lb-bar-inner{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px}
-.empty-lb{text-align:center;padding:60px 20px;font-family:var(--font-mono);font-size:13px;color:var(--muted)}
+.lb-table th{font-family:var(--font-mono);font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border)}
+.lb-table td{padding:12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+.lb-rank{font-family:var(--font-mono);font-size:18px;font-weight:700;color:var(--muted);width:50px}
+.lb-rank.gold{color:#ffd700}.lb-rank.silver{color:#c0c0c0}.lb-rank.bronze{color:#cd7f32}
+.lb-name{font-weight:600;color:var(--text);display:flex;align-items:center;gap:10px}
+.lb-table tr:hover td{background:rgba(255,255,255,0.01)}
+.follow-btn{padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:10px;cursor:pointer;transition:all .2s}
+.follow-btn:hover,.follow-btn.following{border-color:var(--accent2);color:var(--accent2)}
+.follow-btn.following{background:rgba(0,255,157,0.07)}
+
+/* ── SEARCH ── */
+.search-page{padding:24px 0}
+.search-bar{display:flex;gap:10px;margin-bottom:24px}
+.search-input{flex:1;padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:13px;outline:none}
+.search-input:focus{border-color:var(--accent)}
+.btn-search{padding:10px 20px;background:linear-gradient(135deg,var(--accent),#0099cc);border:none;border-radius:8px;color:var(--bg);font-family:var(--font-mono);font-size:12px;font-weight:700;cursor:pointer}
+.user-result{background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:16px;overflow:hidden}
+.user-result-header{padding:16px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.user-result-name{font-family:var(--font-mono);font-size:16px;font-weight:600;color:var(--accent2)}
+.user-result-meta{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.user-result-subs{padding:16px 20px}
+.mini-sub{padding:8px 12px;background:var(--surface);border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border)}
+.mini-sub-title{font-family:var(--font-mono);font-size:12px;color:var(--text)}
+.mini-sub-rating{font-family:var(--font-mono);font-size:11px;color:var(--warn)}
+
+/* ── NOTIFICATIONS ── */
+.notif-page{padding:24px 0}
+.notif-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:10px;transition:border-color .2s}
+.notif-item:hover{border-color:rgba(0,212,255,0.3)}
+.notif-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.notif-who{font-family:var(--font-mono);font-size:13px;color:var(--accent2)}
+.notif-when{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.notif-q{font-size:13px;color:var(--text);font-weight:600}
+.notif-lang{font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.08);color:var(--accent);border:1px solid rgba(0,212,255,0.2);margin-top:4px;display:inline-block}
+
+/* ── ADMIN ── */
+.admin-page{padding:24px 0;display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.admin-section{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.admin-section-title{padding:16px 20px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}
+.admin-list{padding:0;max-height:400px;overflow-y:auto}
+.admin-list::-webkit-scrollbar{width:4px}
+.admin-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.admin-item{padding:12px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);gap:10px}
+.admin-item:last-child{border-bottom:none}
+.admin-item-info{flex:1;min-width:0}
+.admin-item-name{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admin-item-sub{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+.admin-item-actions{display:flex;gap:6px;flex-shrink:0}
+.btn-sm{padding:4px 10px;border-radius:5px;border:1px solid;font-family:var(--font-mono);font-size:10px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.btn-sm-danger{border-color:var(--hard);color:var(--hard);background:transparent}
+.btn-sm-danger:hover{background:rgba(255,77,109,0.1)}
+.btn-sm-success{border-color:var(--accent2);color:var(--accent2);background:transparent}
+.btn-sm-success:hover{background:rgba(0,255,157,0.1)}
+.btn-sm-muted{border-color:var(--border);color:var(--muted);background:transparent}
+.btn-sm-muted:hover{border-color:var(--accent);color:var(--accent)}
+.admin-full{grid-column:1/-1}
+.add-question-form{padding:20px;display:flex;flex-direction:column;gap:12px}
+.form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+
+/* ── FULL-WIDTH PAGES ── */
+.full-page{padding:24px 0}
 
 /* TOAST */
-#toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;font-weight:600;z-index:999;transform:translateY(80px);opacity:0;transition:all .3s cubic-bezier(.4,0,.2,1);border:1px solid;pointer-events:none}
-#toast.show{transform:translateY(0);opacity:1}
-#toast.success{background:rgba(0,255,157,0.1);border-color:var(--accent2);color:var(--accent2)}
-#toast.error{background:rgba(255,77,109,0.1);border-color:var(--hard);color:var(--hard)}
-
-/* LOADING */
-.loading{text-align:center;padding:40px;font-family:var(--font-mono);font-size:12px;color:var(--muted);animation:blink 1.2s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-
-@media(max-width:900px){
-  .main-layout{grid-template-columns:1fr}
-  .question-list{max-height:240px}
-  .form-grid{grid-template-columns:1fr}
-}
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;z-index:9999;animation:toast-in .3s ease;max-width:320px}
+.toast.success{background:#0d2a1a;border:1px solid var(--accent2);color:var(--accent2)}
+.toast.error{background:#2a0d0d;border:1px solid var(--hard);color:var(--hard)}
+@keyframes toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 </style>
 </head>
 <body>
+
+<!-- AUTH PAGE -->
+<div id="auth-page">
+  <div class="auth-box">
+    <div class="auth-logo">&lt;Go/&gt;</div>
+    <div class="auth-sub">5-Hour Hackathon Challenge</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="showAuthTab('login')">Login</button>
+      <button class="auth-tab" onclick="showAuthTab('register')">Register</button>
+    </div>
+    <div id="login-form">
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="login-email" type="email" placeholder="you@example.com"/></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="login-password" type="password" placeholder="••••••••"/></div>
+      <button class="btn-primary" onclick="doLogin()">Enter the Arena</button>
+    </div>
+    <div id="register-form" style="display:none">
+      <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="reg-name" type="text" placeholder="Your handle"/></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="reg-email" type="email" placeholder="you@example.com"/></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="reg-password" type="password" placeholder="Min 6 characters"/></div>
+      <button class="btn-primary" onclick="doRegister()">Create Account</button>
+    </div>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<!-- MAIN APP (hidden until login) -->
+<div id="main-app" style="display:none">
 <div class="app">
-
-<!-- HEADER -->
-<header>
-  <div class="brand">
-    <div class="brand-logo">Go</div>
-    <div>
-      <div class="brand-name">hack<span>.go</span></div>
-      <div class="brand-sub">Bootcamp Challenge</div>
-    </div>
-  </div>
-  <div class="timer-block">
-    <div class="timer-label">⏱ Time Remaining</div>
-    <div class="timer-display" id="timerDisplay">05:00:00</div>
-    <div class="timer-controls">
-      <button class="timer-btn" id="timerToggle" onclick="toggleTimer()">PAUSE</button>
-      <button class="timer-btn" onclick="resetTimer()">RESET</button>
-    </div>
-  </div>
-</header>
-
-<!-- NAV TABS -->
-<div class="nav-tabs">
-  <button class="nav-tab active" onclick="switchPage('questions',this)">Questions</button>
-  <button class="nav-tab" onclick="switchPage('leaderboard',this)">🏆 Leaderboard</button>
-</div>
-
-<!-- PROGRESS -->
-<div class="progress-section" id="progressSection">
-  <div class="progress-meta">
-    <div class="progress-label">Challenge Progress</div>
-    <div class="progress-count" id="progressCount">0 / 0 completed</div>
-  </div>
-  <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar" style="width:0%"></div></div>
-  <div class="stats-row" id="statsRow"></div>
-</div>
-
-<!-- QUESTIONS PAGE -->
-<div id="questionsPage">
-<div class="main-layout">
-  <aside class="sidebar">
-    <div class="sidebar-title">Questions</div>
-    <div class="filter-row" id="filterRow">
-      <button class="filter-chip active" onclick="setFilter('all',this)">All</button>
-      <button class="filter-chip" onclick="setFilter('easy',this)">Easy</button>
-      <button class="filter-chip" onclick="setFilter('medium',this)">Medium</button>
-      <button class="filter-chip" onclick="setFilter('hard',this)">Hard</button>
-    </div>
-    <div class="question-list" id="questionList"></div>
-  </aside>
-
-  <div class="detail-pane">
-    <div id="detailArea">
-      <div class="empty-state">
-        <div class="empty-state-icon">{ }</div>
-        <div class="empty-state-text">← Select a question to begin<br/>Your 5-hour clock is ticking</div>
+  <header>
+    <div class="brand">
+      <div class="brand-logo">&lt;/&gt;</div>
+      <div>
+        <div class="brand-name">go<span>hack</span>.dev</div>
+        <div class="brand-sub">5-hour challenge</div>
       </div>
     </div>
-
-    <!-- ADD QUESTION -->
-    <div class="add-panel">
-      <div class="panel-header" onclick="toggleAddPanel()">
-        <div class="panel-title"><span>+</span> Add New Question</div>
-        <div class="panel-toggle" id="panelToggle">+</div>
+    <div class="header-right">
+      <div class="user-info">
+        <span class="user-name" id="header-username"></span>
+        <span class="user-badge" id="header-admin-badge" style="display:none">ADMIN</span>
+        <span class="answered-count" id="header-answered"></span>
       </div>
-      <div class="panel-body" id="panelBody">
-        <div class="form-grid">
-          <div class="form-group full">
-            <label class="form-label">Question Title</label>
-            <input class="form-input" id="newTitle" type="text" placeholder="e.g. Reading files with bufio.Scanner"/>
-          </div>
-          <div class="form-group full">
-            <label class="form-label">Description / Task</label>
-            <textarea class="form-textarea" id="newDesc" placeholder="Describe what the candidate needs to implement..."></textarea>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Difficulty</label>
-            <select class="form-select" id="newDiff">
-              <option value="easy">Easy</option>
-              <option value="medium" selected>Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Category</label>
-            <input class="form-input" id="newCat" type="text" placeholder="e.g. File I/O"/>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Hint Link URL</label>
-            <input class="form-input" id="newHintUrl" type="url" placeholder="https://pkg.go.dev/..."/>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Hint Link Text</label>
-            <input class="form-input" id="newHintText" type="text" placeholder="e.g. os.ReadFile docs"/>
-          </div>
-        </div>
-        <div class="form-actions">
-          <button class="btn-ghost" onclick="toggleAddPanel()">Cancel</button>
-          <button class="btn-primary" onclick="submitQuestion()">+ Add Question</button>
+      <div class="timer-block">
+        <div class="timer-label">Session Time</div>
+        <div class="timer-display" id="timer-display">05:00:00</div>
+        <div class="timer-controls">
+          <button class="timer-btn" id="timer-toggle-btn" onclick="toggleTimer()">▐▐ Pause</button>
+          <button class="timer-btn" onclick="resetTimer()">↺ Reset</button>
         </div>
       </div>
+      <button class="btn-logout" onclick="doLogout()">↪ Logout</button>
+    </div>
+  </header>
+
+  <nav class="nav-tabs">
+    <button class="nav-tab active" data-tab="questions" onclick="switchTab('questions')">Questions</button>
+    <button class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</button>
+    <button class="nav-tab" data-tab="search" onclick="switchTab('search')">Search Users</button>
+    <button class="nav-tab" data-tab="notifications" onclick="switchTab('notifications')">Notifications<span class="notif-dot" id="notif-dot" style="display:none"></span></button>
+    <button class="nav-tab" data-tab="admin" id="admin-tab" style="display:none" onclick="switchTab('admin')">Admin Panel</button>
+  </nav>
+
+  <!-- QUESTIONS TAB -->
+  <div id="tab-questions">
+    <div class="progress-section">
+      <div class="progress-meta">
+        <span class="progress-label">Progress</span>
+        <span class="progress-count" id="progress-count">0 / 0 solved</span>
+      </div>
+      <div class="progress-bar-outer"><div class="progress-bar-inner" id="progress-bar" style="width:0%"></div></div>
+      <div class="stats-row">
+        <span class="stat-pill"><span class="stat-dot" style="background:var(--easy)"></span><span id="easy-count">0 Easy</span></span>
+        <span class="stat-pill"><span class="stat-dot" style="background:var(--medium)"></span><span id="medium-count">0 Medium</span></span>
+        <span class="stat-pill"><span class="stat-dot" style="background:var(--hard)"></span><span id="hard-count">0 Hard</span></span>
+      </div>
+    </div>
+    <div class="main-layout">
+      <aside class="sidebar">
+        <div class="sidebar-title">Filter</div>
+        <div class="filter-row">
+          <button class="filter-chip active" onclick="setFilter('all',this)">All</button>
+          <button class="filter-chip" onclick="setFilter('easy',this)">Easy</button>
+          <button class="filter-chip" onclick="setFilter('medium',this)">Medium</button>
+          <button class="filter-chip" onclick="setFilter('hard',this)">Hard</button>
+        </div>
+        <div class="question-list" id="question-list"></div>
+      </aside>
+      <main class="detail-pane" id="detail-pane">
+        <div class="empty-state">
+          <div class="empty-state-icon">{_}</div>
+          <div class="empty-state-text">Select a question to begin<br/>your hackathon journey</div>
+        </div>
+      </main>
     </div>
   </div>
-</div>
-</div>
 
-<!-- LEADERBOARD PAGE -->
-<div id="leaderboardPage" style="display:none">
-  <div class="leaderboard-page">
-    <div class="lb-header">
-      <div class="lb-title">🏆 Contributor Leaderboard</div>
-      <div class="lb-sub">Ranked by average peer review rating across all submissions</div>
+  <!-- LEADERBOARD TAB -->
+  <div id="tab-leaderboard" style="display:none">
+    <div class="leaderboard-page">
+      <div class="section-title" style="margin-bottom:20px">Rankings</div>
+      <table class="lb-table" id="lb-table">
+        <thead><tr>
+          <th>#</th><th>Hacker</th><th>Solutions</th><th>Avg Rating</th><th>Reviews</th><th>Follow</th>
+        </tr></thead>
+        <tbody id="lb-body"></tbody>
+      </table>
     </div>
-    <div id="lbContent"><div class="loading">Loading leaderboard...</div></div>
   </div>
-</div>
 
-</div><!-- .app -->
-<div id="toast"></div>
+  <!-- SEARCH TAB -->
+  <div id="tab-search" style="display:none">
+    <div class="search-page">
+      <div class="search-bar">
+        <input class="search-input" id="search-input" placeholder="Search by username..." onkeyup="if(event.key==='Enter')doSearch()"/>
+        <button class="btn-search" onclick="doSearch()">Search</button>
+      </div>
+      <div id="search-results"></div>
+    </div>
+  </div>
+
+  <!-- NOTIFICATIONS TAB -->
+  <div id="tab-notifications" style="display:none">
+    <div class="notif-page">
+      <div class="section-title" style="margin-bottom:20px">Feed — People You Follow</div>
+      <div id="notif-list"></div>
+    </div>
+  </div>
+
+  <!-- ADMIN TAB -->
+  <div id="tab-admin" style="display:none">
+    <div class="admin-page">
+      <div class="admin-section">
+        <div class="admin-section-title">Users</div>
+        <div class="admin-list" id="admin-user-list"></div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-section-title">Questions — Visibility</div>
+        <div class="admin-list" id="admin-q-list"></div>
+      </div>
+      <div class="admin-section admin-full">
+        <div class="admin-section-title">Add New Question</div>
+        <div class="add-question-form">
+          <div class="form-row">
+            <div><label class="form-label">Title</label><input class="form-input" id="aq-title" placeholder="Question title"/></div>
+            <div class="form-row-3">
+              <div><label class="form-label">Difficulty</label>
+                <select class="form-select" id="aq-diff">
+                  <option value="easy">Easy</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="hard">Hard</option>
+                </select>
+              </div>
+              <div><label class="form-label">Category</label><input class="form-input" id="aq-cat" placeholder="General"/></div>
+              <div></div>
+            </div>
+          </div>
+          <div><label class="form-label">Description</label><textarea class="form-input" id="aq-desc" rows="3" placeholder="Describe the challenge..."></textarea></div>
+          <div class="form-row">
+            <div><label class="form-label">Hint URL</label><input class="form-input" id="aq-hurl" placeholder="https://pkg.go.dev"/></div>
+            <div><label class="form-label">Hint Text</label><input class="form-input" id="aq-htxt" placeholder="Go docs"/></div>
+          </div>
+          <button class="btn-send" onclick="adminAddQuestion()">+ Add Question</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.app -->
+</div><!-- /#main-app -->
 
 <script>
 // ── STATE ──────────────────────────────────────────────────
-let questions = [], completed = new Set(), activeId = null, currentFilter = 'all';
-let expandedSubs = new Set(), reviewRatings = {};
+let currentUser = null;
+let authToken = null;
+let questions = [];
+let completedIds = new Set();
+let currentFilter = 'all';
+let currentQuestion = null;
+let followingIds = new Set();
 
-try { const s = localStorage.getItem('hackathon_completed'); if(s) completed = new Set(JSON.parse(s)); } catch(e){}
+// Timer state
+let timerSeconds = 5 * 60 * 60;
+let timerRunning = false;
+let timerInterval = null;
+// Per-question timers: { questionId: remainingSeconds }
+let questionTimers = {};
+let questionTimerIntervals = {};
 
-// ── TIMER ──────────────────────────────────────────────────
-const DURATION = 5*60*60;
-let timeLeft = DURATION, timerRunning = true;
-try { const t = parseInt(localStorage.getItem('hackathon_timer')); if(t>0&&t<=DURATION) timeLeft=t; } catch(e){}
+// ── INIT ──────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('authToken');
+  const savedUser = localStorage.getItem('currentUser');
+  if (saved && savedUser) {
+    authToken = saved;
+    currentUser = JSON.parse(savedUser);
+    enterApp();
+  }
+});
 
-function formatTime(s){ return `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
-function updateTimerDisplay(){
-  const el = document.getElementById('timerDisplay');
-  el.textContent = formatTime(timeLeft);
-  el.className = 'timer-display' + (timeLeft<=600?' critical':timeLeft<=1800?' warning':'');
-}
-function toggleTimer(){ timerRunning=!timerRunning; document.getElementById('timerToggle').textContent=timerRunning?'PAUSE':'START'; }
-function resetTimer(){ timeLeft=DURATION; timerRunning=true; document.getElementById('timerToggle').textContent='PAUSE'; updateTimerDisplay(); try{localStorage.removeItem('hackathon_timer');}catch(e){} }
-setInterval(()=>{ if(!timerRunning||timeLeft<=0) return; timeLeft--; updateTimerDisplay(); try{localStorage.setItem('hackathon_timer',timeLeft);}catch(e){}; }, 1000);
-updateTimerDisplay();
-
-// ── PAGE SWITCHING ─────────────────────────────────────────
-function switchPage(page, el){
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('questionsPage').style.display = page==='questions'?'':'none';
-  document.getElementById('leaderboardPage').style.display = page==='leaderboard'?'':'none';
-  document.getElementById('progressSection').style.display = page==='questions'?'':'none';
-  if(page==='leaderboard') loadLeaderboard();
-}
-
-// ── QUESTIONS ──────────────────────────────────────────────
-async function loadQuestions(){
-  try{
-    const res = await fetch('/api/questions');
-    questions = await res.json();
-    renderSidebar(); updateProgress();
-  } catch(e){ showToast('Failed to load questions','error'); }
+// ── AUTH ──────────────────────────────────────────────────
+function showAuthTab(tab) {
+  document.getElementById('auth-error').textContent = '';
+  document.querySelectorAll('.auth-tab').forEach((t,i) => {
+    t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register'));
+  });
+  document.getElementById('login-form').style.display = tab==='login' ? '' : 'none';
+  document.getElementById('register-form').style.display = tab==='register' ? '' : 'none';
 }
 
-function renderSidebar(){
-  const filtered = currentFilter==='all' ? questions : questions.filter(q=>q.difficulty===currentFilter);
-  document.getElementById('questionList').innerHTML = filtered.map((q,i)=>`
-    <div class="q-item ${activeId===q.id?'active':''} ${completed.has(q.id)?'completed':''}" onclick="selectQuestion(${q.id})">
-      <div class="q-num">${completed.has(q.id)?'✓':(i+1)}</div>
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!email || !password) { showAuthError('Email and password required'); return; }
+  try {
+    const res = await fetch('/api/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({email, password})
+    });
+    if (!res.ok) { showAuthError(await res.text()); return; }
+    const data = await res.json();
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem('authToken', authToken);
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    enterApp();
+  } catch(e) { showAuthError('Connection error'); }
+}
+
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  if (!name || !email || !password) { showAuthError('All fields required'); return; }
+  try {
+    const res = await fetch('/api/auth/register', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, email, password})
+    });
+    if (!res.ok) { showAuthError(await res.text()); return; }
+    const data = await res.json();
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem('authToken', authToken);
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    enterApp();
+  } catch(e) { showAuthError('Connection error'); }
+}
+
+async function doLogout() {
+  await apiFetch('/api/auth/logout', {method:'POST'});
+  authToken = null; currentUser = null;
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('currentUser');
+  // Stop all timers
+  clearInterval(timerInterval);
+  Object.values(questionTimerIntervals).forEach(clearInterval);
+  document.getElementById('auth-page').style.display = 'flex';
+  document.getElementById('main-app').style.display = 'none';
+}
+
+function showAuthError(msg) {
+  document.getElementById('auth-error').textContent = msg;
+}
+
+// ── ENTER APP ─────────────────────────────────────────────
+async function enterApp() {
+  document.getElementById('auth-page').style.display = 'none';
+  document.getElementById('main-app').style.display = 'block';
+
+  // Refresh user info (answered count)
+  try {
+    const me = await apiFetch('/api/me');
+    const data = await me.json();
+    currentUser = data.user;
+    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+    document.getElementById('header-answered').textContent = `${data.answered} solved`;
+  } catch(e){}
+
+  document.getElementById('header-username').textContent = currentUser.name;
+  if (currentUser.is_admin) {
+    document.getElementById('header-admin-badge').style.display = 'inline';
+    document.getElementById('admin-tab').style.display = 'inline-block';
+  }
+
+  await loadFollowing();
+  await loadQuestions();
+  checkNotifications();
+  startTimer();
+}
+
+// ── API HELPER ────────────────────────────────────────────
+function apiFetch(url, opts = {}) {
+  opts.headers = opts.headers || {};
+  if (authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+  return fetch(url, opts);
+}
+
+// ── TIMER ─────────────────────────────────────────────────
+function startTimer() {
+  timerRunning = true;
+  document.getElementById('timer-toggle-btn').textContent = '▐▐ Pause';
+  timerInterval = setInterval(() => {
+    if (timerSeconds > 0) { timerSeconds--; updateTimerDisplay(); }
+    else { clearInterval(timerInterval); }
+  }, 1000);
+}
+
+function toggleTimer() {
+  if (timerRunning) {
+    clearInterval(timerInterval);
+    timerRunning = false;
+    document.getElementById('timer-toggle-btn').textContent = '▶ Resume';
+  } else { startTimer(); }
+}
+
+function resetTimer() {
+  clearInterval(timerInterval);
+  timerSeconds = 5*60*60;
+  timerRunning = false;
+  document.getElementById('timer-toggle-btn').textContent = '▶ Resume';
+  updateTimerDisplay();
+  // Recalculate question timers
+  assignQuestionTimers();
+}
+
+function updateTimerDisplay() {
+  const h = Math.floor(timerSeconds/3600);
+  const m = Math.floor((timerSeconds%3600)/60);
+  const s = timerSeconds%60;
+  const display = document.getElementById('timer-display');
+  display.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  display.className = 'timer-display' + (timerSeconds<600?' critical':timerSeconds<1800?' warning':'');
+}
+
+// Assign per-question time slots based on difficulty
+function assignQuestionTimers() {
+  const visible = questions.filter(q => q.visible);
+  const easy = visible.filter(q=>q.difficulty==='easy');
+  const medium = visible.filter(q=>q.difficulty==='medium');
+  const hard = visible.filter(q=>q.difficulty==='hard');
+
+  // Time per question by difficulty (seconds): easy=12min, medium=18min, hard=25min
+  const easyTime = 12*60, medTime = 18*60, hardTime = 25*60;
+  const total = easy.length*easyTime + medium.length*medTime + hard.length*hardTime;
+  const scale = total > 0 ? (5*3600)/total : 1;
+
+  Object.values(questionTimerIntervals).forEach(clearInterval);
+  questionTimerIntervals = {};
+  questionTimers = {};
+
+  visible.forEach(q => {
+    let base = q.difficulty==='easy'?easyTime:q.difficulty==='medium'?medTime:hardTime;
+    questionTimers[q.id] = Math.round(base * scale);
+    startQuestionTimer(q.id);
+  });
+}
+
+function startQuestionTimer(qid) {
+  questionTimerIntervals[qid] = setInterval(() => {
+    if (questionTimers[qid] > 0) {
+      questionTimers[qid]--;
+      updateQTimerDisplay(qid);
+    } else {
+      clearInterval(questionTimerIntervals[qid]);
+      // Remove question from view
+      const el = document.querySelector(`.q-item[data-id="${qid}"]`);
+      if (el) {
+        el.style.transition = 'opacity 0.8s';
+        el.style.opacity = '0';
+        setTimeout(() => { el.remove(); updateProgress(); }, 800);
+      }
+      if (currentQuestion && currentQuestion.id === qid) {
+        document.getElementById('detail-pane').innerHTML = `<div class="empty-state"><div class="empty-state-icon">⏱</div><div class="empty-state-text">Time's up for this question!</div></div>`;
+      }
+    }
+  }, 1000);
+}
+
+function updateQTimerDisplay(qid) {
+  const el = document.querySelector(`.q-timer[data-id="${qid}"]`);
+  if (!el) return;
+  const s = questionTimers[qid] || 0;
+  const m = Math.floor(s/60), sec = s%60;
+  el.textContent = `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')} left`;
+  el.className = 'q-timer' + (s < 120 ? ' expiring' : '');
+}
+
+function qTimerStr(qid) {
+  const s = questionTimers[qid] || 0;
+  const m = Math.floor(s/60), sec = s%60;
+  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')} left`;
+}
+
+// ── QUESTIONS ─────────────────────────────────────────────
+async function loadQuestions() {
+  const res = await apiFetch('/api/questions');
+  questions = await res.json();
+  // Build completed set from localStorage
+  const saved = JSON.parse(localStorage.getItem('completed_' + currentUser.id) || '[]');
+  completedIds = new Set(saved);
+  assignQuestionTimers();
+  renderQuestionList();
+  updateProgress();
+}
+
+function renderQuestionList() {
+  const list = document.getElementById('question-list');
+  const visible = currentUser.is_admin ? questions : questions.filter(q => q.visible);
+  const filtered = currentFilter === 'all' ? visible : visible.filter(q => q.difficulty === currentFilter);
+  list.innerHTML = filtered.map((q,i) => `
+    <div class="q-item ${completedIds.has(q.id)?'completed':''} ${currentQuestion&&currentQuestion.id===q.id?'active':''}"
+         data-id="${q.id}" onclick="selectQuestion(${q.id})">
+      <span class="q-num">${i+1}</span>
       <div class="q-info">
-        <div class="q-title">${esc(q.title)}</div>
+        <div class="q-title">${escHtml(q.title)}</div>
         <div class="q-meta">
           <span class="diff-badge diff-${q.difficulty}">${q.difficulty}</span>
-          <span class="cat-tag">${esc(q.category)}</span>
+          <span class="cat-tag">${escHtml(q.category)}</span>
+          ${currentUser.is_admin && !q.visible ? '<span class="hidden-tag">hidden</span>' : ''}
         </div>
+        <div class="q-timer" data-id="${q.id}">${qTimerStr(q.id)}</div>
       </div>
-    </div>`).join('');
+    </div>
+  `).join('');
 }
 
-function selectQuestion(id){
-  activeId=id; renderSidebar();
-  const q = questions.find(q=>q.id===id); if(!q) return;
-  const isDone = completed.has(id);
-  const displayNum = questions.findIndex(x=>x.id===id) + 1;
-  document.getElementById('detailArea').innerHTML = `
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  btn.classList.add('active');
+  renderQuestionList();
+}
+
+function updateProgress() {
+  const visible = questions.filter(q => q.visible);
+  const total = visible.length;
+  const done = visible.filter(q => completedIds.has(q.id)).length;
+  document.getElementById('progress-count').textContent = `${done} / ${total} solved`;
+  document.getElementById('progress-bar').style.width = total > 0 ? `${(done/total)*100}%` : '0%';
+  document.getElementById('easy-count').textContent = `${questions.filter(q=>q.difficulty==='easy'&&q.visible).length} Easy`;
+  document.getElementById('medium-count').textContent = `${questions.filter(q=>q.difficulty==='medium'&&q.visible).length} Medium`;
+  document.getElementById('hard-count').textContent = `${questions.filter(q=>q.difficulty==='hard'&&q.visible).length} Hard`;
+  // Update header answered
+  const myAnswered = visible.filter(q=>completedIds.has(q.id)).length;
+  document.getElementById('header-answered').textContent = `${myAnswered} solved`;
+}
+
+async function selectQuestion(id) {
+  currentQuestion = questions.find(q => q.id === id);
+  if (!currentQuestion) return;
+  renderQuestionList();
+  const pane = document.getElementById('detail-pane');
+  const isComplete = completedIds.has(id);
+  const isAdmin = currentUser.is_admin;
+
+  pane.innerHTML = `
     <div class="detail-card">
       <div class="detail-header">
         <div class="detail-title-group">
-          <div class="detail-number">Question #${displayNum}</div>
-          <div class="detail-title">${esc(q.title)}</div>
+          <div class="detail-number">Question #${id}</div>
+          <div class="detail-title">${escHtml(currentQuestion.title)}</div>
           <div class="detail-badges">
-            <span class="badge badge-${q.difficulty}">${q.difficulty}</span>
-            <span class="badge badge-cat">${esc(q.category)}</span>
+            <span class="badge badge-${currentQuestion.difficulty}">${currentQuestion.difficulty}</span>
+            <span class="badge badge-cat">${escHtml(currentQuestion.category)}</span>
+            ${!currentQuestion.visible?'<span class="badge badge-hidden">Hidden from users</span>':''}
           </div>
         </div>
         <div class="detail-actions">
-          <button class="btn btn-complete ${isDone?'done':''}" onclick="toggleComplete(${q.id})">${isDone?'✓ Completed':'◎ Mark Done'}</button>
-          <button class="btn btn-delete" onclick="deleteQuestion(${q.id})">✕</button>
+          <button class="btn-action btn-hint" onclick="toggleHint()">💡 Hint</button>
+          <button class="btn-action btn-complete ${isComplete?'done':''}" id="complete-btn" onclick="toggleComplete(${id})">
+            ${isComplete?'✓ Completed':'Mark Complete'}
+          </button>
+          ${isAdmin ? `
+            <button class="btn-action ${currentQuestion.visible?'btn-vis':'btn-vis hidden'}" id="vis-btn" onclick="adminToggleVisibility(${id})">
+              ${currentQuestion.visible?'👁 Visible':'👁 Hidden'}
+            </button>
+            <button class="btn-action btn-danger" onclick="adminDeleteQuestion(${id})">🗑 Delete</button>
+          ` : ''}
         </div>
       </div>
       <div class="detail-body">
-        <div class="section-label">Task Description</div>
-        <div class="description-text">${fmtDesc(q.description)}</div>
-        <div class="hint-card">
-          <div class="hint-icon">💡</div>
-          <div class="hint-content">
-            <div class="hint-label">Hint — Go Docs</div>
-            <a class="hint-link" href="${esc(q.hint_url)}" target="_blank" rel="noopener">→ ${esc(q.hint_text||q.hint_url)}</a>
+        <div class="detail-description">${escHtml(currentQuestion.description)}</div>
+        <div class="detail-hint" id="hint-box">
+          <div class="hint-label">💡 Hint</div>
+          <div class="hint-text">${escHtml(currentQuestion.hint_text)} — <a class="hint-link" href="${escHtml(currentQuestion.hint_url)}" target="_blank">Open docs ↗</a></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Submit Solution</div>
+      <div class="submit-form">
+        <div class="form-row">
+          <div>
+            <label class="form-label">Language</label>
+            <select class="form-select" id="sub-lang">
+              <option value="go">Go</option>
+              <option value="python">Python</option>
+              <option value="javascript">JavaScript</option>
+              <option value="typescript">TypeScript</option>
+              <option value="java">Java</option>
+              <option value="c">C</option>
+              <option value="cpp">C++</option>
+              <option value="rust">Rust</option>
+              <option value="bash">Bash</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Notes (optional)</label>
+            <input class="form-input" id="sub-notes" placeholder="Approach, time complexity…"/>
           </div>
         </div>
-        <div class="inline-tabs">
-          <button class="inline-tab active" onclick="switchInlineTab('task',this,${q.id})">Task</button>
-          <button class="inline-tab" onclick="switchInlineTab('submit',this,${q.id})">Submit Solution</button>
-          <button class="inline-tab" onclick="switchInlineTab('solutions',this,${q.id})">View Solutions</button>
+        <div><label class="form-label">Code</label><textarea class="form-input" id="sub-code" placeholder="Paste your solution here…"></textarea></div>
+        <div style="margin-top:12px"><button class="btn-send" onclick="submitSolution(${id})">Submit Solution →</button></div>
+      </div>
+    </div>
+    <div>
+      <div class="section-title">Solutions</div>
+      <div class="submissions-list" id="submissions-list"><div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:20px">Loading…</div></div>
+    </div>
+  `;
+  loadSubmissions(id);
+}
+
+function toggleHint() {
+  const box = document.getElementById('hint-box');
+  box.classList.toggle('visible');
+}
+
+function toggleComplete(id) {
+  if (completedIds.has(id)) return; // Can't unmark
+  completedIds.add(id);
+  savecompleted();
+  updateProgress();
+  renderQuestionList();
+  const btn = document.getElementById('complete-btn');
+  if (btn) { btn.textContent = '✓ Completed'; btn.classList.add('done'); }
+  showToast('Marked as complete!', 'success');
+}
+
+function savecompleted() {
+  localStorage.setItem('completed_' + currentUser.id, JSON.stringify([...completedIds]));
+}
+
+async function loadSubmissions(qid) {
+  const res = await apiFetch(`/api/submissions?question_id=${qid}`);
+  const subs = await res.json();
+  const list = document.getElementById('submissions-list');
+  if (!list) return;
+  if (!subs.length) {
+    list.innerHTML = '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:20px">No solutions yet. Be the first!</div>';
+    return;
+  }
+  list.innerHTML = subs.map(s => `
+    <div class="sub-card">
+      <div class="sub-header" onclick="toggleSub(${s.id})">
+        <span class="sub-author">${escHtml(s.author_name)}</span>
+        <div class="sub-meta">
+          <span class="sub-lang">${escHtml(s.language)}</span>
+          <span class="stars">${starsHtml(s.avg_rating)}</span>
+          <span class="sub-count">${s.review_count} review${s.review_count!==1?'s':''}</span>
         </div>
-        <div id="tab-task-${q.id}" class="inline-tab-content active"></div>
-        <div id="tab-submit-${q.id}" class="inline-tab-content">${renderSubmitForm(q.id)}</div>
-        <div id="tab-solutions-${q.id}" class="inline-tab-content"><div class="loading">Loading...</div></div>
       </div>
-    </div>`;
-}
-
-function switchInlineTab(tab, el, qid){
-  const body = el.closest('.detail-body');
-  body.querySelectorAll('.inline-tab').forEach(t=>t.classList.remove('active'));
-  body.querySelectorAll('.inline-tab-content').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById(`tab-${tab}-${qid}`).classList.add('active');
-  if(tab==='solutions') loadSubmissions(qid);
-}
-
-// ── SUBMIT SOLUTION ────────────────────────────────────────
-function renderSubmitForm(qid){
-  return `
-  <div class="submit-form">
-    <div class="form-grid">
-      <div class="form-group">
-        <label class="form-label">Your Name</label>
-        <input class="form-input" id="sol-name-${qid}" type="text" placeholder="e.g. Victor"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Language</label>
-        <select class="form-select" id="sol-lang-${qid}">
-          <option value="go" selected>Go</option>
-          <option value="bash">Bash</option>
-          <option value="other">Other</option>
-        </select>
-      </div>
-      <div class="form-group full">
-        <label class="form-label">Your Code</label>
-        <textarea class="form-input code-textarea" id="sol-code-${qid}" placeholder="package main\n\nimport \"fmt\"\n\nfunc main() {\n    // your solution here\n}"></textarea>
-      </div>
-      <div class="form-group full">
-        <label class="form-label">Notes / Explanation (optional)</label>
-        <textarea class="form-textarea" id="sol-notes-${qid}" placeholder="Explain your approach, time complexity, trade-offs..."></textarea>
-      </div>
-    </div>
-    <div class="form-actions">
-      <button class="btn-primary" onclick="submitSolution(${qid})">Submit Solution →</button>
-    </div>
-  </div>`;
-}
-
-async function submitSolution(qid){
-  const name  = document.getElementById(`sol-name-${qid}`).value.trim();
-  const lang  = document.getElementById(`sol-lang-${qid}`).value;
-  const code  = document.getElementById(`sol-code-${qid}`).value.trim();
-  const notes = document.getElementById(`sol-notes-${qid}`).value.trim();
-  if(!name||!code){ showToast('Name and code are required','error'); return; }
-  try{
-    const res = await fetch('/api/submissions',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({question_id:qid,author_name:name,code,language:lang,notes})});
-    if(!res.ok) throw new Error();
-    document.getElementById(`sol-code-${qid}`).value='';
-    document.getElementById(`sol-notes-${qid}`).value='';
-    showToast('Solution submitted! 🚀','success');
-  } catch(e){ showToast('Failed to submit','error'); }
-}
-
-// ── LOAD SUBMISSIONS ───────────────────────────────────────
-async function loadSubmissions(qid){
-  const el = document.getElementById(`tab-solutions-${qid}`);
-  el.innerHTML = '<div class="loading">Loading solutions...</div>';
-  try{
-    const res = await fetch(`/api/submissions?question_id=${qid}`);
-    const subs = await res.json();
-    if(!subs.length){ el.innerHTML='<div class="no-submissions">No solutions yet. Be the first to submit!</div>'; return; }
-    el.innerHTML = `<div class="submissions-list">${subs.map((s,i)=>renderSubCard(s,i+1)).join('')}</div>`;
-  } catch(e){ el.innerHTML='<div class="no-submissions">Failed to load solutions.</div>'; }
-}
-
-function renderSubCard(s, rank){
-  const stars = renderStars(s.avg_rating);
-  const rankBadge = rank<=3 ? `<span class="rank-badge rank-${rank}">${['🥇','🥈','🥉'][rank-1]} #${rank}</span>` : `<span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">#${rank}</span>`;
-  const isOpen = expandedSubs.has(s.id);
-  return `
-  <div class="sub-card" id="sub-${s.id}">
-    <div class="sub-header" onclick="toggleSub(${s.id},${s.question_id})">
-      <div style="display:flex;align-items:center;gap:10px">
-        ${rankBadge}
-        <span class="sub-author">${esc(s.author_name)}</span>
-        <span class="sub-lang">${esc(s.language)}</span>
-      </div>
-      <div class="sub-meta">
-        <div class="star-display">
-          <span class="stars">${stars}</span>
-          <span class="rating-num">${s.avg_rating>0?s.avg_rating.toFixed(1):'—'}</span>
-        </div>
-        <span class="review-count">${s.review_count} review${s.review_count!==1?'s':''}</span>
-        <span style="color:var(--muted);font-size:12px">${isOpen?'▲':'▼'}</span>
-      </div>
-    </div>
-    <div class="sub-body ${isOpen?'open':''}" id="subbody-${s.id}">
-      ${s.notes?`<div class="sub-notes">"${esc(s.notes)}"</div>`:''}
-      <div class="sub-date">Submitted ${fmtDate(s.created_at)}</div>
-      <div class="code-block"><pre>${esc(s.code)}</pre></div>
-      <div class="reviews-section">
-        <div class="reviews-title">Peer Reviews</div>
-        <div class="review-list" id="reviews-${s.id}"><div class="loading">Loading...</div></div>
-        <div class="add-review">
-          <div class="add-review-title">Leave a Review</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label class="form-label">Your Name</label>
-              <input class="form-input" id="rv-name-${s.id}" type="text" placeholder="Your name"/>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Rating</label>
-              <div class="star-picker" id="stars-${s.id}">
-                ${[1,2,3,4,5].map(n=>`<button class="star-btn" data-val="${n}" onclick="setStar(${s.id},${n})">★</button>`).join('')}
-              </div>
-            </div>
-            <div class="form-group full">
-              <label class="form-label">Comment</label>
-              <textarea class="form-textarea" id="rv-comment-${s.id}" placeholder="What did you think of this solution? Any suggestions?"></textarea>
-            </div>
+      <div class="sub-body" id="sub-body-${s.id}">
+        <pre class="code-block">${escHtml(s.code)}</pre>
+        ${s.notes?`<div class="sub-notes">💬 ${escHtml(s.notes)}</div>`:''}
+        <div class="review-form">
+          <div class="form-label">Rate this solution</div>
+          <div class="stars-input" id="stars-${s.id}">
+            ${[1,2,3,4,5].map(n=>`<button class="star-btn" data-sub="${s.id}" data-val="${n}" onclick="setStar(${s.id},${n})">☆</button>`).join('')}
           </div>
-          <div class="form-actions">
-            <button class="btn-primary" onclick="submitReview(${s.id})">Submit Review</button>
-          </div>
+          <input class="form-input" id="comment-${s.id}" placeholder="Leave a comment…" style="font-size:12px"/>
+          <div><button class="btn-send" onclick="submitReview(${s.id})">Post Review</button></div>
         </div>
+        <div class="reviews-list" id="reviews-${s.id}"><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Loading reviews…</div></div>
       </div>
     </div>
-  </div>`;
+  `).join('');
 }
 
-async function toggleSub(sid, qid){
-  const body = document.getElementById(`subbody-${sid}`);
-  const isOpen = expandedSubs.has(sid);
-  if(isOpen){ expandedSubs.delete(sid); body.classList.remove('open'); }
-  else { expandedSubs.add(sid); body.classList.add('open'); loadReviews(sid); }
+function toggleSub(id) {
+  const body = document.getElementById(`sub-body-${id}`);
+  const isOpen = body.classList.contains('open');
+  document.querySelectorAll('.sub-body').forEach(b=>b.classList.remove('open'));
+  if (!isOpen) {
+    body.classList.add('open');
+    loadReviews(id);
+  }
 }
 
-// ── REVIEWS ────────────────────────────────────────────────
-async function loadReviews(sid){
-  const el = document.getElementById(`reviews-${sid}`); if(!el) return;
-  try{
-    const res = await fetch(`/api/reviews?submission_id=${sid}`);
-    const reviews = await res.json();
-    if(!reviews.length){ el.innerHTML='<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-bottom:10px">No reviews yet.</div>'; return; }
-    el.innerHTML = reviews.map(r=>`
-      <div class="review-item">
-        <div class="review-top">
-          <span class="reviewer-name">${esc(r.reviewer_name)}</span>
-          <span class="review-stars">${renderStars(r.rating)}</span>
+let starValues = {};
+function setStar(subId, val) {
+  starValues[subId] = val;
+  document.querySelectorAll(`#stars-${subId} .star-btn`).forEach(btn => {
+    btn.textContent = parseInt(btn.dataset.val) <= val ? '★' : '☆';
+    btn.classList.toggle('lit', parseInt(btn.dataset.val) <= val);
+  });
+}
+
+async function submitReview(subId) {
+  const rating = starValues[subId] || 0;
+  const comment = document.getElementById(`comment-${subId}`).value;
+  if (!rating) { showToast('Please select a star rating', 'error'); return; }
+  const res = await apiFetch('/api/reviews', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({submission_id: subId, rating, comment})
+  });
+  if (!res.ok) { showToast(await res.text(), 'error'); return; }
+  showToast('Review submitted!', 'success');
+  loadReviews(subId);
+}
+
+async function loadReviews(subId) {
+  const res = await apiFetch(`/api/reviews?submission_id=${subId}`);
+  const reviews = await res.json();
+  const el = document.getElementById(`reviews-${subId}`);
+  if (!el) return;
+  if (!reviews.length) { el.innerHTML = '<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">No reviews yet</div>'; return; }
+  el.innerHTML = reviews.map(r => `
+    <div class="review-item">
+      <div class="review-header">
+        <span class="review-author">${escHtml(r.reviewer_name)}</span>
+        <span class="stars">${starsHtml(r.rating)}</span>
+      </div>
+      ${r.comment?`<div class="review-comment">${escHtml(r.comment)}</div>`:''}
+    </div>
+  `).join('');
+}
+
+async function submitSolution(qid) {
+  const code = document.getElementById('sub-code').value.trim();
+  const language = document.getElementById('sub-lang').value;
+  const notes = document.getElementById('sub-notes').value.trim();
+  if (!code) { showToast('Code is required', 'error'); return; }
+  const res = await apiFetch('/api/submissions', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({question_id: qid, code, language, notes})
+  });
+  if (!res.ok) { showToast(await res.text(), 'error'); return; }
+  showToast('Solution submitted!', 'success');
+  // Auto-mark complete
+  completedIds.add(qid);
+  savecompleted();
+  updateProgress();
+  renderQuestionList();
+  const btn = document.getElementById('complete-btn');
+  if (btn) { btn.textContent = '✓ Completed'; btn.classList.add('done'); }
+  document.getElementById('sub-code').value = '';
+  document.getElementById('sub-notes').value = '';
+  loadSubmissions(qid);
+}
+
+// ── LEADERBOARD ───────────────────────────────────────────
+async function loadLeaderboard() {
+  const res = await apiFetch('/api/leaderboard');
+  const board = await res.json();
+  const ranks = ['gold','silver','bronze'];
+  document.getElementById('lb-body').innerHTML = board.map((c,i) => `
+    <tr>
+      <td><span class="lb-rank ${ranks[i]||''}">${i<3?['🥇','🥈','🥉'][i]:i+1}</span></td>
+      <td><span class="lb-name">${escHtml(c.author_name)}</span></td>
+      <td><span style="font-family:var(--font-mono)">${c.submission_count}</span></td>
+      <td>${starsHtml(c.avg_rating)} <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${c.avg_rating.toFixed(1)}</span></td>
+      <td><span style="font-family:var(--font-mono)">${c.total_reviews}</span></td>
+      <td>${c.user_id && c.user_id !== currentUser.id ? `
+        <button class="follow-btn ${followingIds.has(c.user_id)?'following':''}" id="fb-${c.user_id}" onclick="toggleFollow(${c.user_id},this)">
+          ${followingIds.has(c.user_id)?'✓ Following':'+ Follow'}
+        </button>` : '—'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ── FOLLOWING ─────────────────────────────────────────────
+async function loadFollowing() {
+  const res = await apiFetch('/api/follows');
+  if (!res.ok) return;
+  const ids = await res.json();
+  followingIds = new Set(ids);
+}
+
+async function toggleFollow(uid, btn) {
+  const isFollowing = followingIds.has(uid);
+  const method = isFollowing ? 'DELETE' : 'POST';
+  const res = await apiFetch('/api/follows', {
+    method, headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({followee_id: uid})
+  });
+  if (!res.ok) return;
+  if (isFollowing) { followingIds.delete(uid); btn.textContent = '+ Follow'; btn.classList.remove('following'); }
+  else { followingIds.add(uid); btn.textContent = '✓ Following'; btn.classList.add('following'); }
+}
+
+// ── SEARCH ────────────────────────────────────────────────
+async function doSearch() {
+  const name = document.getElementById('search-input').value.trim();
+  if (!name) return;
+  const res = await apiFetch(`/api/search?name=${encodeURIComponent(name)}`);
+  if (!res.ok) return;
+  const results = await res.json();
+  const el = document.getElementById('search-results');
+  if (!results.length) { el.innerHTML = '<div style="font-family:var(--font-mono);font-size:13px;color:var(--muted);text-align:center;padding:40px">No users found</div>'; return; }
+  el.innerHTML = results.map(r => `
+    <div class="user-result">
+      <div class="user-result-header">
+        <div>
+          <div class="user-result-name">${escHtml(r.user.name)}</div>
+          <div class="user-result-meta">${r.submissions.length} solution${r.submissions.length!==1?'s':''} submitted</div>
         </div>
-        ${r.comment?`<div class="review-comment">${esc(r.comment)}</div>`:''}
-        <div class="review-date">${fmtDate(r.created_at)}</div>
-      </div>`).join('');
-  } catch(e){ el.innerHTML='<div style="color:var(--hard);font-size:12px">Failed to load reviews.</div>'; }
+        ${r.user.id !== currentUser.id ? `
+          <button class="follow-btn ${followingIds.has(r.user.id)?'following':''}" onclick="toggleFollow(${r.user.id},this)">
+            ${followingIds.has(r.user.id)?'✓ Following':'+ Follow'}
+          </button>` : ''}
+      </div>
+      <div class="user-result-subs">
+        ${r.submissions.length ? r.submissions.map(s => {
+          const q = questions.find(x=>x.id===s.question_id);
+          return `<div class="mini-sub">
+            <div>
+              <div class="mini-sub-title">${q?escHtml(q.title):`Question #${s.question_id}`}</div>
+              <span class="sub-lang">${escHtml(s.language)}</span>
+            </div>
+            <span class="mini-sub-rating">${starsHtml(s.avg_rating)} ${s.avg_rating.toFixed(1)}</span>
+          </div>`;
+        }).join('') : '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">No submissions yet</div>'}
+      </div>
+    </div>
+  `).join('');
 }
 
-function setStar(sid, val){
-  reviewRatings[sid]=val;
-  const btns = document.querySelectorAll(`#stars-${sid} .star-btn`);
-  btns.forEach(b=>{ b.classList.toggle('active', parseInt(b.dataset.val)<=val); });
+// ── NOTIFICATIONS ─────────────────────────────────────────
+async function checkNotifications() {
+  const res = await apiFetch('/api/notifications');
+  if (!res.ok) return;
+  const notifs = await res.json();
+  if (notifs.length) document.getElementById('notif-dot').style.display = 'inline-block';
 }
 
-async function submitReview(sid){
-  const name    = document.getElementById(`rv-name-${sid}`).value.trim();
-  const comment = document.getElementById(`rv-comment-${sid}`).value.trim();
-  const rating  = reviewRatings[sid]||0;
-  if(!name||!rating){ showToast('Name and star rating are required','error'); return; }
-  try{
-    const res = await fetch('/api/reviews',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({submission_id:sid,reviewer_name:name,rating,comment})});
-    if(!res.ok) throw new Error();
-    document.getElementById(`rv-name-${sid}`).value='';
-    document.getElementById(`rv-comment-${sid}`).value='';
-    reviewRatings[sid]=0;
-    document.querySelectorAll(`#stars-${sid} .star-btn`).forEach(b=>b.classList.remove('active'));
-    showToast('Review submitted! ⭐','success');
-    loadReviews(sid);
-  } catch(e){ showToast('Failed to submit review','error'); }
+async function loadNotifications() {
+  const res = await apiFetch('/api/notifications');
+  if (!res.ok) return;
+  const notifs = await res.json();
+  document.getElementById('notif-dot').style.display = 'none';
+  const el = document.getElementById('notif-list');
+  if (!notifs.length) {
+    el.innerHTML = '<div style="font-family:var(--font-mono);font-size:13px;color:var(--muted);text-align:center;padding:60px">Follow other hackers to see their activity here</div>';
+    return;
+  }
+  el.innerHTML = notifs.map(n => `
+    <div class="notif-item">
+      <div class="notif-top">
+        <span class="notif-who">${escHtml(n.submission.author_name)}</span>
+        <span class="notif-when">${timeAgo(n.submission.created_at)}</span>
+      </div>
+      <div class="notif-q">${escHtml(n.question.title)}</div>
+      <span class="notif-lang">${escHtml(n.submission.language)}</span>
+      <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-left:8px">${n.question.difficulty}</span>
+    </div>
+  `).join('');
 }
 
-// ── LEADERBOARD ────────────────────────────────────────────
-async function loadLeaderboard(){
-  const el = document.getElementById('lbContent');
-  el.innerHTML = '<div class="loading">Loading leaderboard...</div>';
-  try{
-    const res = await fetch('/api/leaderboard');
-    const board = await res.json();
-    if(!board.length){ el.innerHTML='<div class="empty-lb">No submissions yet. Be the first!</div>'; return; }
-    const maxRating = Math.max(...board.map(c=>c.avg_rating),0.1);
-    el.innerHTML = `
-      <table class="lb-table">
-        <thead><tr>
-          <th>Rank</th><th>Name</th><th>Submissions</th><th>Avg Rating</th><th>Reviews Received</th><th>Rating Bar</th>
-        </tr></thead>
-        <tbody>
-          ${board.map((c,i)=>`
-          <tr>
-            <td class="lb-rank">${i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1)}</td>
-            <td class="lb-name">${esc(c.author_name)}</td>
-            <td class="lb-subs">${c.submission_count}</td>
-            <td class="lb-rating">${c.avg_rating>0?c.avg_rating.toFixed(2):'—'} ${renderStars(c.avg_rating)}</td>
-            <td class="lb-reviews">${c.total_reviews}</td>
-            <td class="lb-bar-cell">
-              <div class="lb-bar-outer"><div class="lb-bar-inner" style="width:${(c.avg_rating/maxRating*100).toFixed(1)}%"></div></div>
-            </td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`;
-  } catch(e){ el.innerHTML='<div class="empty-lb">Failed to load leaderboard.</div>'; }
+// ── ADMIN ─────────────────────────────────────────────────
+async function loadAdminPanel() {
+  const [usersRes, qRes] = await Promise.all([
+    apiFetch('/api/admin/users'),
+    apiFetch('/api/questions')
+  ]);
+  const users = await usersRes.json();
+  const qs = await qRes.json();
+
+  document.getElementById('admin-user-list').innerHTML = users.map(u => `
+    <div class="admin-item">
+      <div class="admin-item-info">
+        <div class="admin-item-name">${escHtml(u.name)} ${u.is_admin?'<span style="font-size:10px;color:var(--accent3)">[ADMIN]</span>':''}</div>
+        <div class="admin-item-sub">${escHtml(u.email)}</div>
+      </div>
+      <div class="admin-item-actions">
+        ${u.id !== currentUser.id ? `
+          <button class="btn-sm ${u.is_admin?'btn-sm-muted':'btn-sm-success'}" onclick="adminToggleAdmin(${u.id},${!u.is_admin})">
+            ${u.is_admin?'Demote':'Make Admin'}
+          </button>
+          <button class="btn-sm btn-sm-danger" onclick="adminDeleteUser(${u.id})">Delete</button>
+        ` : '<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">You</span>'}
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('admin-q-list').innerHTML = qs.map(q => `
+    <div class="admin-item">
+      <div class="admin-item-info">
+        <div class="admin-item-name">${escHtml(q.title)}</div>
+        <div class="admin-item-sub">${q.difficulty} · ${escHtml(q.category)}</div>
+      </div>
+      <div class="admin-item-actions">
+        <button class="btn-sm ${q.visible?'btn-sm-success':'btn-sm-muted'}" onclick="adminToggleVisibilityFromPanel(${q.id},${!q.visible},this)">
+          ${q.visible?'👁 Visible':'👁 Hidden'}
+        </button>
+        <button class="btn-sm btn-sm-danger" onclick="adminDeleteQuestion(${q.id})">Delete</button>
+      </div>
+    </div>
+  `).join('');
 }
 
-// ── COMPLETE ───────────────────────────────────────────────
-function toggleComplete(id){
-  completed.has(id)?completed.delete(id):completed.add(id);
-  try{localStorage.setItem('hackathon_completed',JSON.stringify([...completed]));}catch(e){}
-  if(completed.has(id)) showToast('Question marked complete! 🎉','success');
-  renderSidebar(); updateProgress(); selectQuestion(id);
+async function adminDeleteUser(id) {
+  if (!confirm('Delete this user? This cannot be undone.')) return;
+  const res = await apiFetch('/api/admin/users', {
+    method:'DELETE', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id})
+  });
+  if (res.ok) { showToast('User deleted', 'success'); loadAdminPanel(); }
+  else { showToast(await res.text(), 'error'); }
 }
 
-function updateProgress(){
-  const total=questions.length, done=[...completed].filter(id=>questions.some(q=>q.id===id)).length;
-  document.getElementById('progressCount').textContent=`${done} / ${total} completed`;
-  document.getElementById('progressBar').style.width=(total?done/total*100:0)+'%';
-  const counts={easy:0,medium:0,hard:0}, doneC={easy:0,medium:0,hard:0};
-  questions.forEach(q=>{counts[q.difficulty]++;if(completed.has(q.id))doneC[q.difficulty]++;});
-  const colors={easy:'var(--easy)',medium:'var(--medium)',hard:'var(--hard)'};
-  document.getElementById('statsRow').innerHTML=Object.keys(counts).map(d=>`
-    <div class="stat-pill">
-      <div class="stat-dot" style="background:${colors[d]}"></div>
-      <span style="color:${colors[d]};font-family:var(--font-mono);font-size:11px">${d}: ${doneC[d]}/${counts[d]}</span>
-    </div>`).join('');
+async function adminToggleAdmin(id, makeAdmin) {
+  const res = await apiFetch('/api/admin/promote', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id, is_admin: makeAdmin})
+  });
+  if (res.ok) { showToast(makeAdmin?'Promoted to admin':'Demoted', 'success'); loadAdminPanel(); }
+  else { showToast(await res.text(), 'error'); }
 }
 
-function setFilter(f,el){
-  currentFilter=f;
-  document.querySelectorAll('.filter-chip').forEach(c=>c.classList.remove('active'));
-  el.classList.add('active'); renderSidebar();
+async function adminToggleVisibility(qid) {
+  const q = questions.find(x=>x.id===qid);
+  if (!q) return;
+  const newVis = !q.visible;
+  const res = await apiFetch('/api/questions/visibility', {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: qid, visible: newVis})
+  });
+  if (res.ok) {
+    q.visible = newVis;
+    showToast(newVis?'Question is now visible':'Question hidden', 'success');
+    const btn = document.getElementById('vis-btn');
+    if (btn) {
+      btn.textContent = newVis ? '👁 Visible' : '👁 Hidden';
+      btn.className = 'btn-action ' + (newVis ? 'btn-vis' : 'btn-vis hidden');
+    }
+    renderQuestionList();
+    assignQuestionTimers();
+  } else { showToast(await res.text(), 'error'); }
 }
 
-// ── DELETE QUESTION ────────────────────────────────────────
-async function deleteQuestion(id){
-  if(!confirm('Delete this question?')) return;
-  try{
-    await fetch('/api/questions/delete',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
-    activeId=null;
-    document.getElementById('detailArea').innerHTML='<div class="empty-state"><div class="empty-state-icon">{ }</div><div class="empty-state-text">Question deleted.</div></div>';
-    completed.delete(id); showToast('Question deleted','success'); await loadQuestions();
-  } catch(e){ showToast('Failed to delete','error'); }
+async function adminToggleVisibilityFromPanel(qid, newVis, btn) {
+  const res = await apiFetch('/api/questions/visibility', {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: qid, visible: newVis})
+  });
+  if (res.ok) {
+    const q = questions.find(x=>x.id===qid);
+    if (q) q.visible = newVis;
+    btn.textContent = newVis ? '👁 Visible' : '👁 Hidden';
+    btn.className = 'btn-sm ' + (newVis?'btn-sm-success':'btn-sm-muted');
+    showToast(newVis?'Question visible':'Question hidden', 'success');
+    renderQuestionList();
+    assignQuestionTimers();
+  } else { showToast(await res.text(), 'error'); }
 }
 
-// ── ADD QUESTION ───────────────────────────────────────────
-function toggleAddPanel(){
-  const body=document.getElementById('panelBody'), toggle=document.getElementById('panelToggle');
-  const open=body.classList.contains('open');
-  body.classList.toggle('open',!open); toggle.classList.toggle('open',!open);
+async function adminDeleteQuestion(qid) {
+  if (!confirm('Delete this question? All submissions will also be deleted.')) return;
+  const res = await apiFetch('/api/questions/delete', {
+    method:'DELETE', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({id: qid})
+  });
+  if (res.ok) {
+    questions = questions.filter(q=>q.id!==qid);
+    showToast('Question deleted', 'success');
+    if (currentQuestion && currentQuestion.id === qid) {
+      document.getElementById('detail-pane').innerHTML = `<div class="empty-state"><div class="empty-state-icon">{_}</div><div class="empty-state-text">Question deleted</div></div>`;
+      currentQuestion = null;
+    }
+    renderQuestionList();
+    loadAdminPanel();
+  } else { showToast(await res.text(), 'error'); }
 }
 
-async function submitQuestion(){
-  const title=document.getElementById('newTitle').value.trim();
-  const desc=document.getElementById('newDesc').value.trim();
-  const diff=document.getElementById('newDiff').value;
-  const cat=document.getElementById('newCat').value.trim();
-  const hintUrl=document.getElementById('newHintUrl').value.trim();
-  const hintText=document.getElementById('newHintText').value.trim();
-  if(!title||!desc){ showToast('Title and Description are required','error'); return; }
-  try{
-    const res=await fetch('/api/questions',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({title,description:desc,difficulty:diff,category:cat||'General',hint_url:hintUrl||'https://pkg.go.dev',hint_text:hintText||'Go documentation'})});
-    if(!res.ok) throw new Error();
-    ['newTitle','newDesc','newCat','newHintUrl','newHintText'].forEach(id=>document.getElementById(id).value='');
-    toggleAddPanel(); showToast('Question added! ✓','success'); await loadQuestions();
-  } catch(e){ showToast('Failed to add question','error'); }
+async function adminAddQuestion() {
+  const title = document.getElementById('aq-title').value.trim();
+  const description = document.getElementById('aq-desc').value.trim();
+  const difficulty = document.getElementById('aq-diff').value;
+  const category = document.getElementById('aq-cat').value.trim() || 'General';
+  const hint_url = document.getElementById('aq-hurl').value.trim() || 'https://pkg.go.dev';
+  const hint_text = document.getElementById('aq-htxt').value.trim() || 'Go documentation';
+  if (!title || !description) { showToast('Title and description required', 'error'); return; }
+  const res = await apiFetch('/api/questions', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({title, description, difficulty, category, hint_url, hint_text})
+  });
+  if (res.ok) {
+    const q = await res.json();
+    questions.push(q);
+    showToast('Question added', 'success');
+    document.getElementById('aq-title').value = '';
+    document.getElementById('aq-desc').value = '';
+    document.getElementById('aq-cat').value = '';
+    document.getElementById('aq-hurl').value = '';
+    document.getElementById('aq-htxt').value = '';
+    renderQuestionList();
+    loadAdminPanel();
+  } else { showToast(await res.text(), 'error'); }
 }
 
-// ── HELPERS ────────────────────────────────────────────────
-function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function fmtDesc(t){ return esc(t).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\n/g,'<br/>'); }
-function fmtDate(d){ return new Date(d).toLocaleString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
-function renderStars(r){
-  const full=Math.round(r), s=[];
-  for(let i=1;i<=5;i++) s.push(i<=full?'★':'☆');
-  return `<span style="color:var(--warn)">${s.join('')}</span>`;
-}
-function showToast(msg,type='success'){
-  const t=document.getElementById('toast'); t.textContent=msg; t.className=`show ${type}`;
-  setTimeout(()=>t.className='',3000);
+// ── TAB SWITCHING ─────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display='none');
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).style.display = '';
+  document.querySelector(`[data-tab="${name}"]`).classList.add('active');
+  if (name==='leaderboard') loadLeaderboard();
+  if (name==='notifications') loadNotifications();
+  if (name==='admin') loadAdminPanel();
 }
 
-// ── INIT ───────────────────────────────────────────────────
-loadQuestions();
+// ── UTILS ─────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function starsHtml(avg) {
+  const full = Math.round(avg);
+  return [1,2,3,4,5].map(i => `<span style="color:${i<=full?'var(--warn)':'var(--muted)'}">${i<=full?'★':'☆'}</span>`).join('');
+}
+
+function timeAgo(dateStr) {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60)+'m ago';
+  if (diff < 86400) return Math.floor(diff/3600)+'h ago';
+  return Math.floor(diff/86400)+'d ago';
+}
+
+function showToast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
 </script>
 </body>
 </html>
