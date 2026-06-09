@@ -442,6 +442,7 @@ let followingIds = new Set();
 let timerSeconds = 5 * 60 * 60;
 let timerRunning = false;
 let timerInterval = null;
+let notifInterval = null;
 // Per-question timers: { questionId: remainingSeconds }
 let questionTimers = {};
 let questionTimerIntervals = {};
@@ -513,6 +514,7 @@ async function doLogout() {
   localStorage.removeItem('currentUser');
   // Stop all timers
   clearInterval(timerInterval);
+  clearInterval(notifInterval);
   Object.values(questionTimerIntervals).forEach(clearInterval);
   document.getElementById('auth-page').style.display = 'flex';
   document.getElementById('main-app').style.display = 'none';
@@ -545,6 +547,8 @@ async function enterApp() {
   await loadFollowing();
   await loadQuestions();
   checkNotifications();
+  // Re-check notifications every 60 seconds while logged in
+  notifInterval = setInterval(checkNotifications, 60 * 1000);
   startTimer();
 }
 
@@ -655,9 +659,24 @@ function qTimerStr(qid) {
 async function loadQuestions() {
   const res = await apiFetch('/api/questions');
   questions = await res.json();
-  // Build completed set from localStorage
-  const saved = JSON.parse(localStorage.getItem('completed_' + currentUser.id) || '[]');
-  completedIds = new Set(saved);
+
+  // Load completed IDs from server (source of truth across devices/sessions)
+  try {
+    const subRes = await apiFetch('/api/submissions');
+    const allSubs = await subRes.json();
+    completedIds = new Set(
+      allSubs
+        .filter(s => s.user_id === currentUser.id)
+        .map(s => s.question_id)
+    );
+    // Keep localStorage in sync as a cache
+    localStorage.setItem('completed_' + currentUser.id, JSON.stringify([...completedIds]));
+  } catch(e) {
+    // Fall back to localStorage if server call fails
+    const saved = JSON.parse(localStorage.getItem('completed_' + currentUser.id) || '[]');
+    completedIds = new Set(saved);
+  }
+
   assignQuestionTimers();
   renderQuestionList();
   updateProgress();
@@ -700,9 +719,7 @@ function updateProgress() {
   document.getElementById('easy-count').textContent = `${questions.filter(q=>q.difficulty==='easy'&&q.visible).length} Easy`;
   document.getElementById('medium-count').textContent = `${questions.filter(q=>q.difficulty==='medium'&&q.visible).length} Medium`;
   document.getElementById('hard-count').textContent = `${questions.filter(q=>q.difficulty==='hard'&&q.visible).length} Hard`;
-  // Update header answered
-  const myAnswered = visible.filter(q=>completedIds.has(q.id)).length;
-  document.getElementById('header-answered').textContent = `${myAnswered} solved`;
+  document.getElementById('header-answered').textContent = `${done} solved`;
 }
 
 async function selectQuestion(id) {
@@ -739,7 +756,7 @@ async function selectQuestion(id) {
         </div>
       </div>
       <div class="detail-body">
-        <div class="detail-description">${escHtml(currentQuestion.description)}</div>
+        <div class="detail-description">${fmtDesc(currentQuestion.description)}</div>
         <div class="detail-hint" id="hint-box">
           <div class="hint-label">💡 Hint</div>
           <div class="hint-text">${escHtml(currentQuestion.hint_text)} — <a class="hint-link" href="${escHtml(currentQuestion.hint_url)}" target="_blank">Open docs ↗</a></div>
@@ -1174,6 +1191,12 @@ function switchTab(name) {
 // ── UTILS ─────────────────────────────────────────────────
 function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDesc(s) {
+  return escHtml(s)
+    .replace(/`([^`]+)`/g, '<code style="font-family:var(--font-mono);font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--accent)">$1</code>')
+    .replace(/\n/g, '<br/>');
 }
 
 function starsHtml(avg) {

@@ -437,13 +437,13 @@ func handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", 405)
 	}
 }
-
 func handleAdminPromote(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", 405)
 		return
 	}
-	if requireAdmin(w, r) == nil {
+	admin := requireAdmin(w, r)
+	if admin == nil {
 		return
 	}
 	var body struct {
@@ -452,6 +452,11 @@ func handleAdminPromote(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON", 400)
+		return
+	}
+	// ← ADD THIS
+	if body.ID == admin.ID && !body.IsAdmin {
+		http.Error(w, "cannot remove your own admin status", 400)
 		return
 	}
 	_, err := db.Exec(`UPDATE users SET is_admin=$1 WHERE id=$2`, body.IsAdmin, body.ID)
