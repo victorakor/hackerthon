@@ -171,6 +171,7 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 .sub-lang{font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.08);color:var(--accent);border:1px solid rgba(0,212,255,0.2)}
 .stars{color:var(--warn);font-size:12px;letter-spacing:1px}
 .sub-count{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
+/* FIX: sub-body hidden by default, shown with .open */
 .sub-body{display:none;padding:0 16px 16px;border-top:1px solid var(--border)}
 .sub-body.open{display:block}
 .code-block{background:var(--surface);border-radius:8px;padding:14px;margin-top:12px;font-family:var(--font-mono);font-size:12px;overflow-x:auto;border:1px solid var(--border);white-space:pre}
@@ -247,14 +248,33 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 .add-question-form{padding:20px;display:flex;flex-direction:column;gap:12px}
 .form-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 
-/* ── FULL-WIDTH PAGES ── */
-.full-page{padding:24px 0}
-
-/* TOAST */
-.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;z-index:9999;animation:toast-in .3s ease;max-width:320px}
-.toast.success{background:#0d2a1a;border:1px solid var(--accent2);color:var(--accent2)}
-.toast.error{background:#2a0d0d;border:1px solid var(--hard);color:var(--hard)}
-@keyframes toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+/* ── TEST RESULTS ── */
+.test-results{margin-top:16px;display:flex;flex-direction:column;gap:8px;animation:slide-in .3s ease}
+.test-results-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.test-results-summary{font-family:var(--font-mono);font-size:12px;font-weight:700}
+.test-results-summary.all-pass{color:var(--accent2)}
+.test-results-summary.partial{color:var(--warn)}
+.test-results-summary.all-fail{color:var(--hard)}
+.test-case{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;transition:border-color .2s}
+.test-case.pass{border-color:rgba(0,255,157,0.3)}
+.test-case.fail{border-color:rgba(255,77,109,0.3)}
+.test-case-header{padding:8px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;gap:8px}
+.test-case-label{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.test-case-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px}
+.test-case-badge.pass{background:rgba(0,255,157,0.1);color:var(--accent2)}
+.test-case-badge.fail{background:rgba(255,77,109,0.1);color:var(--hard)}
+/* FIX: test-case-body hidden by default; .open makes it grid */
+.test-case-body{display:none;padding:10px 12px;border-top:1px solid var(--border);grid-template-columns:1fr 1fr;gap:10px}
+.test-case-body.open{display:grid}
+.test-field-label{font-family:var(--font-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.test-field-val{font-family:var(--font-mono);font-size:11px;background:var(--card);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:80px;overflow-y:auto}
+.test-field-val.error{color:var(--hard);border-color:rgba(255,77,109,0.2)}
+.btn-run{padding:10px 24px;background:linear-gradient(135deg,var(--accent2),#009966);border:none;border-radius:8px;color:var(--bg);font-family:var(--font-mono);font-size:12px;font-weight:700;cursor:pointer;transition:opacity .2s;letter-spacing:1px;text-transform:uppercase}
+.btn-run:hover{opacity:.85}
+.btn-run:disabled{opacity:.4;cursor:not-allowed}
+.run-spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--bg);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;margin-right:6px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.no-tests-note{font-family:var(--font-mono);font-size:11px;color:var(--muted);font-style:italic;margin-top:8px}
 </style>
 </head>
 <body>
@@ -269,8 +289,8 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
       <button class="auth-tab" onclick="showAuthTab('register')">Register</button>
     </div>
     <div id="login-form">
-      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="login-email" type="email" placeholder="you@example.com"/></div>
-      <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="login-password" type="password" placeholder="••••••••"/></div>
+      <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="login-email" type="email" placeholder="you@example.com" onkeyup="if(event.key==='Enter')doLogin()"/></div>
+      <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="login-password" type="password" placeholder="••••••••" onkeyup="if(event.key==='Enter')doLogin()"/></div>
       <button class="btn-primary" onclick="doLogin()">Enter the Arena</button>
     </div>
     <div id="register-form" style="display:none">
@@ -304,11 +324,11 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
         <div class="timer-label">Session Time</div>
         <div class="timer-display" id="timer-display">05:00:00</div>
         <div class="timer-controls">
-          <button class="timer-btn" id="timer-toggle-btn" onclick="toggleTimer()">▐▐ Pause</button>
-          <button class="timer-btn" onclick="resetTimer()">↺ Reset</button>
+          <button class="timer-btn" id="timer-toggle-btn" onclick="toggleTimer()">&#x25AE;&#x25AE; Pause</button>
+          <button class="timer-btn" onclick="resetTimer()">&#x21BA; Reset</button>
         </div>
       </div>
-      <button class="btn-logout" onclick="doLogout()">↪ Logout</button>
+      <button class="btn-logout" onclick="doLogout()">&#x21AA; Logout</button>
     </div>
   </header>
 
@@ -419,6 +439,10 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
             <div><label class="form-label">Hint URL</label><input class="form-input" id="aq-hurl" placeholder="https://pkg.go.dev"/></div>
             <div><label class="form-label">Hint Text</label><input class="form-input" id="aq-htxt" placeholder="Go docs"/></div>
           </div>
+          <div>
+            <label class="form-label">Test Cases (JSON) <span style="color:var(--muted);font-size:9px;text-transform:none;letter-spacing:0">— optional, format: [{"input":"hello\n","expected":"HELLO"}]</span></label>
+            <textarea class="form-input" id="aq-tests" rows="3" placeholder='[{"input":"hello\n","expected":"HELLO"},{"input":"world\n","expected":"WORLD"}]'></textarea>
+          </div>
           <button class="btn-send" onclick="adminAddQuestion()">+ Add Question</button>
         </div>
       </div>
@@ -429,56 +453,59 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 </div><!-- /#main-app -->
 
 <script>
-// ── STATE ──────────────────────────────────────────────────
-let currentUser = null;
-let authToken = null;
-let questions = [];
-let completedIds = new Set();
-let currentFilter = 'all';
-let currentQuestion = null;
-let followingIds = new Set();
+// ── STATE ─────────────────────────────────────────────────
+var currentUser = null;
+var authToken = null;
+var questions = [];
+var completedIds = new Set();
+var currentFilter = 'all';
+var currentQuestion = null;
+var followingIds = new Set();
+var starValues = {};
 
-// Timer state
-let timerSeconds = 5 * 60 * 60;
-let timerRunning = false;
-let timerInterval = null;
-let notifInterval = null;
+// Session timer
+var timerSeconds = 5 * 60 * 60;
+var timerRunning = false;
+var timerInterval = null;
+
 // Per-question timers: { questionId: remainingSeconds }
-let questionTimers = {};
-let questionTimerIntervals = {};
+var questionTimers = {};
+// Single shared interval that ticks all question timers (pauses with session timer)
+var questionTickInterval = null;
 
-// ── INIT ──────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('authToken');
-  const savedUser = localStorage.getItem('currentUser');
+// ── INIT ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', function() {
+  var saved = localStorage.getItem('authToken');
+  var savedUser = localStorage.getItem('currentUser');
   if (saved && savedUser) {
     authToken = saved;
-    currentUser = JSON.parse(savedUser);
+    try { currentUser = JSON.parse(savedUser); } catch(e) { return; }
     enterApp();
   }
 });
 
-// ── AUTH ──────────────────────────────────────────────────
+// ── AUTH ─────────────────────────────────────────────────
 function showAuthTab(tab) {
   document.getElementById('auth-error').textContent = '';
-  document.querySelectorAll('.auth-tab').forEach((t,i) => {
-    t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='register'));
+  document.querySelectorAll('.auth-tab').forEach(function(t, i) {
+    t.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
   });
-  document.getElementById('login-form').style.display = tab==='login' ? '' : 'none';
-  document.getElementById('register-form').style.display = tab==='register' ? '' : 'none';
+  document.getElementById('login-form').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
 }
 
 async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
+  var email = document.getElementById('login-email').value.trim();
+  var password = document.getElementById('login-password').value;
   if (!email || !password) { showAuthError('Email and password required'); return; }
   try {
-    const res = await fetch('/api/auth/login', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({email, password})
+    var res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: email, password: password})
     });
     if (!res.ok) { showAuthError(await res.text()); return; }
-    const data = await res.json();
+    var data = await res.json();
     authToken = data.token;
     currentUser = data.user;
     localStorage.setItem('authToken', authToken);
@@ -488,17 +515,18 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const name = document.getElementById('reg-name').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const password = document.getElementById('reg-password').value;
+  var name = document.getElementById('reg-name').value.trim();
+  var email = document.getElementById('reg-email').value.trim();
+  var password = document.getElementById('reg-password').value;
   if (!name || !email || !password) { showAuthError('All fields required'); return; }
   try {
-    const res = await fetch('/api/auth/register', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name, email, password})
+    var res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: name, email: email, password: password})
     });
     if (!res.ok) { showAuthError(await res.text()); return; }
-    const data = await res.json();
+    var data = await res.json();
     authToken = data.token;
     currentUser = data.user;
     localStorage.setItem('authToken', authToken);
@@ -508,14 +536,12 @@ async function doRegister() {
 }
 
 async function doLogout() {
-  await apiFetch('/api/auth/logout', {method:'POST'});
-  authToken = null; currentUser = null;
+  try { await apiFetch('/api/auth/logout', {method: 'POST'}); } catch(e) {}
+  authToken = null;
+  currentUser = null;
   localStorage.removeItem('authToken');
   localStorage.removeItem('currentUser');
-  // Stop all timers
-  clearInterval(timerInterval);
-  clearInterval(notifInterval);
-  Object.values(questionTimerIntervals).forEach(clearInterval);
+  stopAllTimers();
   document.getElementById('auth-page').style.display = 'flex';
   document.getElementById('main-app').style.display = 'none';
 }
@@ -524,19 +550,21 @@ function showAuthError(msg) {
   document.getElementById('auth-error').textContent = msg;
 }
 
-// ── ENTER APP ─────────────────────────────────────────────
+// ── ENTER APP ────────────────────────────────────────────
 async function enterApp() {
   document.getElementById('auth-page').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
 
-  // Refresh user info (answered count)
+  // Refresh user info from server
   try {
-    const me = await apiFetch('/api/me');
-    const data = await me.json();
-    currentUser = data.user;
-    localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    document.getElementById('header-answered').textContent = `${data.answered} solved`;
-  } catch(e){}
+    var meRes = await apiFetch('/api/me');
+    if (meRes.ok) {
+      var meData = await meRes.json();
+      currentUser = meData.user;
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      document.getElementById('header-answered').textContent = meData.answered + ' solved';
+    }
+  } catch(e) {}
 
   document.getElementById('header-username').textContent = currentUser.name;
   if (currentUser.is_admin) {
@@ -547,678 +575,973 @@ async function enterApp() {
   await loadFollowing();
   await loadQuestions();
   checkNotifications();
-  // Re-check notifications every 60 seconds while logged in
-  notifInterval = setInterval(checkNotifications, 60 * 1000);
   startTimer();
 }
 
 // ── API HELPER ────────────────────────────────────────────
-function apiFetch(url, opts = {}) {
+function apiFetch(url, opts) {
+  opts = opts || {};
   opts.headers = opts.headers || {};
   if (authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
   return fetch(url, opts);
 }
 
-// ── TIMER ─────────────────────────────────────────────────
+// ── SESSION TIMER ─────────────────────────────────────────
 function startTimer() {
+  if (timerRunning) return;
   timerRunning = true;
-  document.getElementById('timer-toggle-btn').textContent = '▐▐ Pause';
-  timerInterval = setInterval(() => {
-    if (timerSeconds > 0) { timerSeconds--; updateTimerDisplay(); }
-    else { clearInterval(timerInterval); }
+  document.getElementById('timer-toggle-btn').textContent = '\u25AE\u25AE Pause';
+  timerInterval = setInterval(function() {
+    if (timerSeconds > 0) {
+      timerSeconds--;
+      updateTimerDisplay();
+    } else {
+      clearInterval(timerInterval);
+      timerRunning = false;
+    }
   }, 1000);
+  startQuestionTick();
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerRunning = false;
+  document.getElementById('timer-toggle-btn').textContent = '\u25BA Resume';
+  stopQuestionTick();
 }
 
 function toggleTimer() {
-  if (timerRunning) {
-    clearInterval(timerInterval);
-    timerRunning = false;
-    document.getElementById('timer-toggle-btn').textContent = '▶ Resume';
-  } else { startTimer(); }
+  if (timerRunning) { stopTimer(); } else { startTimer(); }
 }
 
 function resetTimer() {
-  clearInterval(timerInterval);
-  timerSeconds = 5*60*60;
-  timerRunning = false;
-  document.getElementById('timer-toggle-btn').textContent = '▶ Resume';
+  stopTimer();
+  timerSeconds = 5 * 60 * 60;
   updateTimerDisplay();
-  // Recalculate question timers
-  assignQuestionTimers();
+  // Reset question timers back to full allocations
+  reassignQuestionTimers();
+}
+
+function stopAllTimers() {
+  clearInterval(timerInterval);
+  stopQuestionTick();
+  timerRunning = false;
 }
 
 function updateTimerDisplay() {
-  const h = Math.floor(timerSeconds/3600);
-  const m = Math.floor((timerSeconds%3600)/60);
-  const s = timerSeconds%60;
-  const display = document.getElementById('timer-display');
-  display.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  display.className = 'timer-display' + (timerSeconds<600?' critical':timerSeconds<1800?' warning':'');
+  var h = Math.floor(timerSeconds / 3600);
+  var m = Math.floor((timerSeconds % 3600) / 60);
+  var s = timerSeconds % 60;
+  var display = document.getElementById('timer-display');
+  display.textContent =
+    String(h).padStart(2, '0') + ':' +
+    String(m).padStart(2, '0') + ':' +
+    String(s).padStart(2, '0');
+  display.className = 'timer-display' +
+    (timerSeconds < 600 ? ' critical' : timerSeconds < 1800 ? ' warning' : '');
 }
 
-// Assign per-question time slots based on difficulty
-function assignQuestionTimers() {
-  const visible = questions.filter(q => q.visible);
-  const easy = visible.filter(q=>q.difficulty==='easy');
-  const medium = visible.filter(q=>q.difficulty==='medium');
-  const hard = visible.filter(q=>q.difficulty==='hard');
+// ── QUESTION TIMERS ───────────────────────────────────────
+// All question timers share a single tick interval that starts/stops with the session timer.
+// This prevents drift and ensures pause/resume works correctly.
 
-  // Time per question by difficulty (seconds): easy=12min, medium=18min, hard=25min
-  const easyTime = 12*60, medTime = 18*60, hardTime = 25*60;
-  const total = easy.length*easyTime + medium.length*medTime + hard.length*hardTime;
-  const scale = total > 0 ? (5*3600)/total : 1;
-
-  Object.values(questionTimerIntervals).forEach(clearInterval);
-  questionTimerIntervals = {};
-  questionTimers = {};
-
-  visible.forEach(q => {
-    let base = q.difficulty==='easy'?easyTime:q.difficulty==='medium'?medTime:hardTime;
-    questionTimers[q.id] = Math.round(base * scale);
-    startQuestionTimer(q.id);
-  });
-}
-
-function startQuestionTimer(qid) {
-  questionTimerIntervals[qid] = setInterval(() => {
-    if (questionTimers[qid] > 0) {
-      questionTimers[qid]--;
-      updateQTimerDisplay(qid);
-    } else {
-      clearInterval(questionTimerIntervals[qid]);
-      // Remove question from view
-      const el = document.querySelector(`.q-item[data-id="${qid}"]`);
-      if (el) {
-        el.style.transition = 'opacity 0.8s';
-        el.style.opacity = '0';
-        setTimeout(() => { el.remove(); updateProgress(); }, 800);
+function startQuestionTick() {
+  if (questionTickInterval) return;
+  questionTickInterval = setInterval(function() {
+    var anyVisible = false;
+    Object.keys(questionTimers).forEach(function(qidStr) {
+      var qid = parseInt(qidStr);
+      if (questionTimers[qid] > 0) {
+        questionTimers[qid]--;
+        anyVisible = true;
+        updateQTimerDisplay(qid);
+        if (questionTimers[qid] === 0) {
+          expireQuestion(qid);
+        }
       }
-      if (currentQuestion && currentQuestion.id === qid) {
-        document.getElementById('detail-pane').innerHTML = `<div class="empty-state"><div class="empty-state-icon">⏱</div><div class="empty-state-text">Time's up for this question!</div></div>`;
-      }
-    }
+    });
   }, 1000);
 }
 
+function stopQuestionTick() {
+  clearInterval(questionTickInterval);
+  questionTickInterval = null;
+}
+
+function expireQuestion(qid) {
+  var el = document.querySelector('.q-item[data-id="' + qid + '"]');
+  if (el) {
+    el.style.transition = 'opacity 0.8s';
+    el.style.opacity = '0';
+    setTimeout(function() {
+      el.remove();
+      updateProgress();
+    }, 800);
+  }
+  if (currentQuestion && currentQuestion.id === qid) {
+    document.getElementById('detail-pane').innerHTML =
+      '<div class="empty-state"><div class="empty-state-icon">&#x23F1;</div>' +
+      '<div class="empty-state-text">Time\'s up for this question!</div></div>';
+    currentQuestion = null;
+  }
+}
+
 function updateQTimerDisplay(qid) {
-  const el = document.querySelector(`.q-timer[data-id="${qid}"]`);
+  var el = document.querySelector('.q-timer[data-id="' + qid + '"]');
   if (!el) return;
-  const s = questionTimers[qid] || 0;
-  const m = Math.floor(s/60), sec = s%60;
-  el.textContent = `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')} left`;
+  var s = questionTimers[qid] || 0;
+  var m = Math.floor(s / 60);
+  var sec = s % 60;
+  el.textContent = String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + ' left';
   el.className = 'q-timer' + (s < 120 ? ' expiring' : '');
 }
 
 function qTimerStr(qid) {
-  const s = questionTimers[qid] || 0;
-  const m = Math.floor(s/60), sec = s%60;
-  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')} left`;
+  var s = questionTimers[qid] !== undefined ? questionTimers[qid] : 0;
+  var m = Math.floor(s / 60);
+  var sec = s % 60;
+  return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + ' left';
+}
+
+// Assign question timer durations proportionally across 5 hours.
+// Called once on first load. Preserves existing timers for already-assigned questions.
+function assignQuestionTimers() {
+  var visible = questions.filter(function(q) { return q.visible; });
+  var easyTime = 12 * 60, medTime = 18 * 60, hardTime = 25 * 60;
+  var total = 0;
+  visible.forEach(function(q) {
+    total += q.difficulty === 'easy' ? easyTime : q.difficulty === 'medium' ? medTime : hardTime;
+  });
+  var scale = total > 0 ? (5 * 3600) / total : 1;
+
+  visible.forEach(function(q) {
+    // Only assign if not yet assigned (preserve countdown already in progress)
+    if (questionTimers[q.id] === undefined) {
+      var base = q.difficulty === 'easy' ? easyTime : q.difficulty === 'medium' ? medTime : hardTime;
+      questionTimers[q.id] = Math.round(base * scale);
+    }
+  });
+
+  if (timerRunning) startQuestionTick();
+}
+
+// Full reassign — used only on timer reset
+function reassignQuestionTimers() {
+  stopQuestionTick();
+  questionTimers = {};
+  var visible = questions.filter(function(q) { return q.visible; });
+  var easyTime = 12 * 60, medTime = 18 * 60, hardTime = 25 * 60;
+  var total = 0;
+  visible.forEach(function(q) {
+    total += q.difficulty === 'easy' ? easyTime : q.difficulty === 'medium' ? medTime : hardTime;
+  });
+  var scale = total > 0 ? (5 * 3600) / total : 1;
+  visible.forEach(function(q) {
+    var base = q.difficulty === 'easy' ? easyTime : q.difficulty === 'medium' ? medTime : hardTime;
+    questionTimers[q.id] = Math.round(base * scale);
+  });
+  renderQuestionList();
+  if (timerRunning) startQuestionTick();
 }
 
 // ── QUESTIONS ─────────────────────────────────────────────
 async function loadQuestions() {
-  const res = await apiFetch('/api/questions');
+  var res = await apiFetch('/api/questions');
+  if (!res.ok) return;
   questions = await res.json();
-
-  // Load completed IDs from server (source of truth across devices/sessions)
-  try {
-    const subRes = await apiFetch('/api/submissions');
-    const allSubs = await subRes.json();
-    completedIds = new Set(
-      allSubs
-        .filter(s => s.user_id === currentUser.id)
-        .map(s => s.question_id)
-    );
-    // Keep localStorage in sync as a cache
-    localStorage.setItem('completed_' + currentUser.id, JSON.stringify([...completedIds]));
-  } catch(e) {
-    // Fall back to localStorage if server call fails
-    const saved = JSON.parse(localStorage.getItem('completed_' + currentUser.id) || '[]');
-    completedIds = new Set(saved);
-  }
-
+  // Load completed IDs from localStorage
+  var saved = [];
+  try { saved = JSON.parse(localStorage.getItem('completed_' + currentUser.id) || '[]'); } catch(e) {}
+  completedIds = new Set(saved);
+  // Assign timers for questions not yet tracked
   assignQuestionTimers();
   renderQuestionList();
   updateProgress();
 }
 
 function renderQuestionList() {
-  const list = document.getElementById('question-list');
-  const visible = currentUser.is_admin ? questions : questions.filter(q => q.visible);
-  const filtered = currentFilter === 'all' ? visible : visible.filter(q => q.difficulty === currentFilter);
-  list.innerHTML = filtered.map((q,i) => `
-    <div class="q-item ${completedIds.has(q.id)?'completed':''} ${currentQuestion&&currentQuestion.id===q.id?'active':''}"
-         data-id="${q.id}" onclick="selectQuestion(${q.id})">
-      <span class="q-num">${i+1}</span>
-      <div class="q-info">
-        <div class="q-title">${escHtml(q.title)}</div>
-        <div class="q-meta">
-          <span class="diff-badge diff-${q.difficulty}">${q.difficulty}</span>
-          <span class="cat-tag">${escHtml(q.category)}</span>
-          ${currentUser.is_admin && !q.visible ? '<span class="hidden-tag">hidden</span>' : ''}
-        </div>
-        <div class="q-timer" data-id="${q.id}">${qTimerStr(q.id)}</div>
-      </div>
-    </div>
-  `).join('');
+  var list = document.getElementById('question-list');
+  var visible = currentUser.is_admin ? questions : questions.filter(function(q) { return q.visible; });
+  var filtered = currentFilter === 'all' ? visible : visible.filter(function(q) { return q.difficulty === currentFilter; });
+  list.innerHTML = filtered.map(function(q, i) {
+    var isActive = currentQuestion && currentQuestion.id === q.id;
+    var isComplete = completedIds.has(q.id);
+    return '<div class="q-item' + (isComplete ? ' completed' : '') + (isActive ? ' active' : '') +
+      '" data-id="' + q.id + '" onclick="selectQuestion(' + q.id + ')">' +
+      '<span class="q-num">' + (i + 1) + '</span>' +
+      '<div class="q-info">' +
+        '<div class="q-title">' + escHtml(q.title) + '</div>' +
+        '<div class="q-meta">' +
+          '<span class="diff-badge diff-' + q.difficulty + '">' + q.difficulty + '</span>' +
+          '<span class="cat-tag">' + escHtml(q.category) + '</span>' +
+          (currentUser.is_admin && !q.visible ? '<span class="hidden-tag">hidden</span>' : '') +
+        '</div>' +
+        '<div class="q-timer" data-id="' + q.id + '">' + qTimerStr(q.id) + '</div>' +
+      '</div></div>';
+  }).join('');
 }
 
 function setFilter(f, btn) {
   currentFilter = f;
-  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
   btn.classList.add('active');
   renderQuestionList();
 }
 
 function updateProgress() {
-  const visible = questions.filter(q => q.visible);
-  const total = visible.length;
-  const done = visible.filter(q => completedIds.has(q.id)).length;
-  document.getElementById('progress-count').textContent = `${done} / ${total} solved`;
-  document.getElementById('progress-bar').style.width = total > 0 ? `${(done/total)*100}%` : '0%';
-  document.getElementById('easy-count').textContent = `${questions.filter(q=>q.difficulty==='easy'&&q.visible).length} Easy`;
-  document.getElementById('medium-count').textContent = `${questions.filter(q=>q.difficulty==='medium'&&q.visible).length} Medium`;
-  document.getElementById('hard-count').textContent = `${questions.filter(q=>q.difficulty==='hard'&&q.visible).length} Hard`;
-  document.getElementById('header-answered').textContent = `${done} solved`;
+  var visible = questions.filter(function(q) { return q.visible; });
+  var total = visible.length;
+  var done = visible.filter(function(q) { return completedIds.has(q.id); }).length;
+  document.getElementById('progress-count').textContent = done + ' / ' + total + ' solved';
+  document.getElementById('progress-bar').style.width = total > 0 ? ((done / total) * 100) + '%' : '0%';
+  document.getElementById('easy-count').textContent = questions.filter(function(q) { return q.difficulty === 'easy' && q.visible; }).length + ' Easy';
+  document.getElementById('medium-count').textContent = questions.filter(function(q) { return q.difficulty === 'medium' && q.visible; }).length + ' Medium';
+  document.getElementById('hard-count').textContent = questions.filter(function(q) { return q.difficulty === 'hard' && q.visible; }).length + ' Hard';
+  document.getElementById('header-answered').textContent = done + ' solved';
 }
 
 async function selectQuestion(id) {
-  currentQuestion = questions.find(q => q.id === id);
+  currentQuestion = questions.find(function(q) { return q.id === id; });
   if (!currentQuestion) return;
   renderQuestionList();
-  const pane = document.getElementById('detail-pane');
-  const isComplete = completedIds.has(id);
-  const isAdmin = currentUser.is_admin;
 
-  pane.innerHTML = `
-    <div class="detail-card">
-      <div class="detail-header">
-        <div class="detail-title-group">
-          <div class="detail-number">Question #${id}</div>
-          <div class="detail-title">${escHtml(currentQuestion.title)}</div>
-          <div class="detail-badges">
-            <span class="badge badge-${currentQuestion.difficulty}">${currentQuestion.difficulty}</span>
-            <span class="badge badge-cat">${escHtml(currentQuestion.category)}</span>
-            ${!currentQuestion.visible?'<span class="badge badge-hidden">Hidden from users</span>':''}
-          </div>
-        </div>
-        <div class="detail-actions">
-          <button class="btn-action btn-hint" onclick="toggleHint()">💡 Hint</button>
-          <button class="btn-action btn-complete ${isComplete?'done':''}" id="complete-btn" onclick="toggleComplete(${id})">
-            ${isComplete?'✓ Completed':'Mark Complete'}
-          </button>
-          ${isAdmin ? `
-            <button class="btn-action ${currentQuestion.visible?'btn-vis':'btn-vis hidden'}" id="vis-btn" onclick="adminToggleVisibility(${id})">
-              ${currentQuestion.visible?'👁 Visible':'👁 Hidden'}
-            </button>
-            <button class="btn-action btn-danger" onclick="adminDeleteQuestion(${id})">🗑 Delete</button>
-          ` : ''}
-        </div>
-      </div>
-      <div class="detail-body">
-        <div class="detail-description">${fmtDesc(currentQuestion.description)}</div>
-        <div class="detail-hint" id="hint-box">
-          <div class="hint-label">💡 Hint</div>
-          <div class="hint-text">${escHtml(currentQuestion.hint_text)} — <a class="hint-link" href="${escHtml(currentQuestion.hint_url)}" target="_blank">Open docs ↗</a></div>
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="section-title">Submit Solution</div>
-      <div class="submit-form">
-        <div class="form-row">
-          <div>
-            <label class="form-label">Language</label>
-            <select class="form-select" id="sub-lang">
-              <option value="go">Go</option>
-              <option value="python">Python</option>
-              <option value="javascript">JavaScript</option>
-              <option value="typescript">TypeScript</option>
-              <option value="java">Java</option>
-              <option value="c">C</option>
-              <option value="cpp">C++</option>
-              <option value="rust">Rust</option>
-              <option value="bash">Bash</option>
-            </select>
-          </div>
-          <div>
-            <label class="form-label">Notes (optional)</label>
-            <input class="form-input" id="sub-notes" placeholder="Approach, time complexity…"/>
-          </div>
-        </div>
-        <div><label class="form-label">Code</label><textarea class="form-input" id="sub-code" placeholder="Paste your solution here…"></textarea></div>
-        <div style="margin-top:12px"><button class="btn-send" onclick="submitSolution(${id})">Submit Solution →</button></div>
-      </div>
-    </div>
-    <div>
-      <div class="section-title">Solutions</div>
-      <div class="submissions-list" id="submissions-list"><div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:20px">Loading…</div></div>
-    </div>
-  `;
+  var q = currentQuestion;
+  var isComplete = completedIds.has(id);
+  var isAdmin = currentUser.is_admin;
+
+  // Parse test cases safely
+  var testCaseCount = 0;
+  try {
+    var tc = JSON.parse(q.test_cases || '[]');
+    testCaseCount = Array.isArray(tc) ? tc.length : 0;
+  } catch(e) { testCaseCount = 0; }
+
+  var pane = document.getElementById('detail-pane');
+  pane.innerHTML =
+    '<div class="detail-card">' +
+      '<div class="detail-header">' +
+        '<div class="detail-title-group">' +
+          '<div class="detail-number">Question #' + id + '</div>' +
+          '<div class="detail-title">' + escHtml(q.title) + '</div>' +
+          '<div class="detail-badges">' +
+            '<span class="badge badge-' + q.difficulty + '">' + q.difficulty + '</span>' +
+            '<span class="badge badge-cat">' + escHtml(q.category) + '</span>' +
+            (!q.visible ? '<span class="badge badge-hidden">Hidden from users</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="detail-actions">' +
+          '<button class="btn-action btn-hint" onclick="toggleHint()">&#x1F4A1; Hint</button>' +
+          '<button class="btn-action btn-complete' + (isComplete ? ' done' : '') + '" id="complete-btn" onclick="toggleComplete(' + id + ')">' +
+            (isComplete ? '&#x2713; Completed' : 'Mark Complete') +
+          '</button>' +
+          (isAdmin ?
+            '<button class="btn-action ' + (q.visible ? 'btn-vis' : 'btn-vis hidden') + '" id="vis-btn" onclick="adminToggleVisibility(' + id + ')">' +
+              (q.visible ? '&#x1F441; Visible' : '&#x1F441; Hidden') +
+            '</button>' +
+            '<button class="btn-action btn-danger" onclick="adminDeleteQuestion(' + id + ')">&#x1F5D1; Delete</button>'
+          : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="detail-body">' +
+        '<div class="detail-description">' + escHtml(q.description) + '</div>' +
+        '<div class="detail-hint" id="hint-box">' +
+          '<div class="hint-label">&#x1F4A1; Hint</div>' +
+          '<div class="hint-text">' + escHtml(q.hint_text) + ' &mdash; ' +
+            '<a class="hint-link" href="' + escHtml(q.hint_url) + '" target="_blank" rel="noopener">Open docs &#x2197;</a>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div>' +
+      '<div class="section-title">Submit Solution</div>' +
+      '<div class="submit-form">' +
+        '<div class="form-row">' +
+          '<div>' +
+            '<label class="form-label">Language</label>' +
+            '<select class="form-select" id="sub-lang">' +
+              '<option value="go">Go</option>' +
+              '<option value="python">Python</option>' +
+              '<option value="javascript">JavaScript</option>' +
+              '<option value="typescript">TypeScript</option>' +
+              '<option value="java">Java</option>' +
+              '<option value="c">C</option>' +
+              '<option value="cpp">C++</option>' +
+              '<option value="rust">Rust</option>' +
+              '<option value="bash">Bash</option>' +
+            '</select>' +
+          '</div>' +
+          '<div>' +
+            '<label class="form-label">Notes (optional)</label>' +
+            '<input class="form-input" id="sub-notes" placeholder="Approach, time complexity\u2026"/>' +
+          '</div>' +
+        '</div>' +
+        '<div><label class="form-label">Code</label><textarea class="form-input" id="sub-code" placeholder="Paste your solution here\u2026"></textarea></div>' +
+        '<div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+          '<button class="btn-run" id="run-btn" onclick="runTests(' + id + ')">&#x25BA; Run Tests</button>' +
+          '<button class="btn-send" id="submit-btn" onclick="submitSolution(' + id + ')">Submit Solution &#x2192;</button>' +
+          (testCaseCount > 0
+            ? '<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">' + testCaseCount + ' test case(s) available</span>'
+            : '<span class="no-tests-note">no test cases &#x2014; run shows raw output</span>') +
+        '</div>' +
+        '<div id="test-results-container"></div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div>' +
+      '<div class="section-title">Solutions</div>' +
+      '<div class="submissions-list" id="submissions-list">' +
+        '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:20px">Loading\u2026</div>' +
+      '</div>' +
+    '</div>';
+
   loadSubmissions(id);
 }
 
 function toggleHint() {
-  const box = document.getElementById('hint-box');
-  box.classList.toggle('visible');
+  var box = document.getElementById('hint-box');
+  if (box) box.classList.toggle('visible');
 }
 
 function toggleComplete(id) {
-  if (completedIds.has(id)) return; // Can't unmark
+  if (completedIds.has(id)) return;
   completedIds.add(id);
-  savecompleted();
+  saveCompleted();
   updateProgress();
   renderQuestionList();
-  const btn = document.getElementById('complete-btn');
-  if (btn) { btn.textContent = '✓ Completed'; btn.classList.add('done'); }
+  var btn = document.getElementById('complete-btn');
+  if (btn) { btn.textContent = '&#x2713; Completed'; btn.classList.add('done'); }
   showToast('Marked as complete!', 'success');
 }
 
-function savecompleted() {
-  localStorage.setItem('completed_' + currentUser.id, JSON.stringify([...completedIds]));
+function saveCompleted() {
+  localStorage.setItem('completed_' + currentUser.id, JSON.stringify(Array.from(completedIds)));
 }
 
+// ── SUBMISSIONS ───────────────────────────────────────────
 async function loadSubmissions(qid) {
-  const res = await apiFetch(`/api/submissions?question_id=${qid}`);
-  const subs = await res.json();
-  const list = document.getElementById('submissions-list');
-  if (!list) return;
-  if (!subs.length) {
-    list.innerHTML = '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:20px">No solutions yet. Be the first!</div>';
-    return;
+  try {
+    var res = await apiFetch('/api/submissions?question_id=' + qid);
+    if (!res.ok) throw new Error('failed');
+    var subs = await res.json();
+    var list = document.getElementById('submissions-list');
+    if (!list) return;
+    if (!subs || !subs.length) {
+      list.innerHTML = '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:20px">No solutions yet. Be the first!</div>';
+      return;
+    }
+    list.innerHTML = subs.map(function(s) {
+      return '<div class="sub-card">' +
+        '<div class="sub-header" onclick="toggleSub(' + s.id + ')">' +
+          '<span class="sub-author">' + escHtml(s.author_name) + '</span>' +
+          '<div class="sub-meta">' +
+            '<span class="sub-lang">' + escHtml(s.language) + '</span>' +
+            '<span class="stars">' + starsHtml(s.avg_rating) + '</span>' +
+            '<span class="sub-count">' + s.review_count + ' review' + (s.review_count !== 1 ? 's' : '') + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="sub-body" id="sub-body-' + s.id + '">' +
+          '<pre class="code-block">' + escHtml(s.code) + '</pre>' +
+          (s.notes ? '<div class="sub-notes">&#x1F4AC; ' + escHtml(s.notes) + '</div>' : '') +
+          '<div class="review-form">' +
+            '<div class="form-label">Rate this solution</div>' +
+            '<div class="stars-input" id="stars-' + s.id + '">' +
+              [1,2,3,4,5].map(function(n) {
+                return '<button class="star-btn" onclick="setStar(' + s.id + ',' + n + ')">&#x2606;</button>';
+              }).join('') +
+            '</div>' +
+            '<input class="form-input" id="comment-' + s.id + '" placeholder="Leave a comment\u2026" style="font-size:12px"/>' +
+            '<div><button class="btn-send" onclick="submitReview(' + s.id + ')">Post Review</button></div>' +
+          '</div>' +
+          '<div class="reviews-list" id="reviews-' + s.id + '">' +
+            '<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Loading reviews\u2026</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {
+    var list2 = document.getElementById('submissions-list');
+    if (list2) list2.innerHTML = '<div style="font-family:var(--font-mono);font-size:12px;color:var(--hard);text-align:center;padding:20px">Failed to load submissions.</div>';
   }
-  list.innerHTML = subs.map(s => `
-    <div class="sub-card">
-      <div class="sub-header" onclick="toggleSub(${s.id})">
-        <span class="sub-author">${escHtml(s.author_name)}</span>
-        <div class="sub-meta">
-          <span class="sub-lang">${escHtml(s.language)}</span>
-          <span class="stars">${starsHtml(s.avg_rating)}</span>
-          <span class="sub-count">${s.review_count} review${s.review_count!==1?'s':''}</span>
-        </div>
-      </div>
-      <div class="sub-body" id="sub-body-${s.id}">
-        <pre class="code-block">${escHtml(s.code)}</pre>
-        ${s.notes?`<div class="sub-notes">💬 ${escHtml(s.notes)}</div>`:''}
-        <div class="review-form">
-          <div class="form-label">Rate this solution</div>
-          <div class="stars-input" id="stars-${s.id}">
-            ${[1,2,3,4,5].map(n=>`<button class="star-btn" data-sub="${s.id}" data-val="${n}" onclick="setStar(${s.id},${n})">☆</button>`).join('')}
-          </div>
-          <input class="form-input" id="comment-${s.id}" placeholder="Leave a comment…" style="font-size:12px"/>
-          <div><button class="btn-send" onclick="submitReview(${s.id})">Post Review</button></div>
-        </div>
-        <div class="reviews-list" id="reviews-${s.id}"><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Loading reviews…</div></div>
-      </div>
-    </div>
-  `).join('');
 }
 
 function toggleSub(id) {
-  const body = document.getElementById(`sub-body-${id}`);
-  const isOpen = body.classList.contains('open');
-  document.querySelectorAll('.sub-body').forEach(b=>b.classList.remove('open'));
+  var body = document.getElementById('sub-body-' + id);
+  if (!body) return;
+  var isOpen = body.classList.contains('open');
+  // Close all open sub-bodies first
+  document.querySelectorAll('.sub-body.open').forEach(function(b) { b.classList.remove('open'); });
   if (!isOpen) {
     body.classList.add('open');
     loadReviews(id);
   }
 }
 
-let starValues = {};
 function setStar(subId, val) {
   starValues[subId] = val;
-  document.querySelectorAll(`#stars-${subId} .star-btn`).forEach(btn => {
-    btn.textContent = parseInt(btn.dataset.val) <= val ? '★' : '☆';
-    btn.classList.toggle('lit', parseInt(btn.dataset.val) <= val);
+  var container = document.getElementById('stars-' + subId);
+  if (!container) return;
+  container.querySelectorAll('.star-btn').forEach(function(btn, i) {
+    btn.innerHTML = (i + 1) <= val ? '&#x2605;' : '&#x2606;';
+    btn.classList.toggle('lit', (i + 1) <= val);
   });
 }
 
 async function submitReview(subId) {
-  const rating = starValues[subId] || 0;
-  const comment = document.getElementById(`comment-${subId}`).value;
+  var rating = starValues[subId] || 0;
+  var commentEl = document.getElementById('comment-' + subId);
+  var comment = commentEl ? commentEl.value.trim() : '';
   if (!rating) { showToast('Please select a star rating', 'error'); return; }
-  const res = await apiFetch('/api/reviews', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({submission_id: subId, rating, comment})
+  var res = await apiFetch('/api/reviews', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({submission_id: subId, rating: rating, comment: comment})
   });
   if (!res.ok) { showToast(await res.text(), 'error'); return; }
   showToast('Review submitted!', 'success');
+  // Reset stars
+  delete starValues[subId];
+  if (commentEl) commentEl.value = '';
+  var starsEl = document.getElementById('stars-' + subId);
+  if (starsEl) starsEl.querySelectorAll('.star-btn').forEach(function(b) { b.innerHTML = '&#x2606;'; b.classList.remove('lit'); });
   loadReviews(subId);
 }
 
 async function loadReviews(subId) {
-  const res = await apiFetch(`/api/reviews?submission_id=${subId}`);
-  const reviews = await res.json();
-  const el = document.getElementById(`reviews-${subId}`);
-  if (!el) return;
-  if (!reviews.length) { el.innerHTML = '<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">No reviews yet</div>'; return; }
-  el.innerHTML = reviews.map(r => `
-    <div class="review-item">
-      <div class="review-header">
-        <span class="review-author">${escHtml(r.reviewer_name)}</span>
-        <span class="stars">${starsHtml(r.rating)}</span>
-      </div>
-      ${r.comment?`<div class="review-comment">${escHtml(r.comment)}</div>`:''}
-    </div>
-  `).join('');
+  try {
+    var res = await apiFetch('/api/reviews?submission_id=' + subId);
+    if (!res.ok) throw new Error('failed');
+    var reviews = await res.json();
+    var el = document.getElementById('reviews-' + subId);
+    if (!el) return;
+    if (!reviews || !reviews.length) {
+      el.innerHTML = '<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">No reviews yet</div>';
+      return;
+    }
+    el.innerHTML = reviews.map(function(r) {
+      return '<div class="review-item">' +
+        '<div class="review-header">' +
+          '<span class="review-author">' + escHtml(r.reviewer_name) + '</span>' +
+          '<span class="stars">' + starsHtml(r.rating) + '</span>' +
+        '</div>' +
+        (r.comment ? '<div class="review-comment">' + escHtml(r.comment) + '</div>' : '') +
+      '</div>';
+    }).join('');
+  } catch(e) {}
+}
+
+// ── CODE RUNNER ───────────────────────────────────────────
+async function runTests(qid) {
+  var codeEl = document.getElementById('sub-code');
+  var langEl = document.getElementById('sub-lang');
+  var code = codeEl ? codeEl.value.trim() : '';
+  var language = langEl ? langEl.value : 'go';
+  if (!code) { showToast('Paste your code first', 'error'); return; }
+
+  var runBtn = document.getElementById('run-btn');
+  var container = document.getElementById('test-results-container');
+  if (runBtn) { runBtn.disabled = true; runBtn.innerHTML = '<span class="run-spinner"></span>Running\u2026'; }
+  if (container) container.innerHTML = '';
+
+  try {
+    var res = await apiFetch('/api/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question_id: qid, code: code, language: language})
+    });
+    if (!res.ok) {
+      var errText = await res.text();
+      if (container) container.innerHTML = '<div style="font-family:var(--font-mono);font-size:12px;color:var(--hard);margin-top:12px">' + escHtml(errText) + '</div>';
+      return;
+    }
+    var result = await res.json();
+    if (container) renderTestResults(result, container);
+  } catch(e) {
+    if (container) container.innerHTML = '<div style="font-family:var(--font-mono);font-size:12px;color:var(--hard);margin-top:12px">Connection error \u2014 could not reach the runner</div>';
+  } finally {
+    if (runBtn) { runBtn.disabled = false; runBtn.innerHTML = '\u25BA Run Tests'; }
+  }
+}
+
+function renderTestResults(result, container) {
+  // No test cases — show raw output
+  if (!result.results || result.results.length === 0) {
+    container.innerHTML = '<div class="no-tests-note" style="margin-top:12px">No output returned.</div>';
+    return;
+  }
+
+  if (result.total === 0) {
+    var r = result.results[0];
+    var isErr = r.error && r.error !== 'no test cases defined for this question \u2014 output shown above';
+    container.innerHTML =
+      '<div class="test-results">' +
+        '<div class="test-results-header">' +
+          '<span class="test-results-summary ' + (isErr ? 'all-fail' : 'all-pass') + '">' +
+            (isErr ? '\u2717 Runtime Error' : '\u2713 Code ran successfully') +
+          '</span>' +
+        '</div>' +
+        '<div class="test-case ' + (isErr ? 'fail' : 'pass') + '">' +
+          '<div class="test-case-body open" style="grid-template-columns:1fr">' +
+            '<div>' +
+              '<div class="test-field-label">' + (isErr ? 'Error' : 'Output') + '</div>' +
+              '<div class="test-field-val' + (isErr ? ' error' : '') + '">' + escHtml(isErr ? r.error : r.got) + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="no-tests-note">No test cases defined \u2014 add them in the admin panel to enable pass/fail checking.</div>' +
+      '</div>';
+    return;
+  }
+
+  var summaryClass, summaryText;
+  if (result.all_passed) {
+    summaryClass = 'all-pass';
+    summaryText = '\u2713 All ' + result.total + ' test(s) passed';
+  } else if (result.passed === 0) {
+    summaryClass = 'all-fail';
+    summaryText = '\u2717 0 / ' + result.total + ' passed';
+  } else {
+    summaryClass = 'partial';
+    summaryText = '\u26A0 ' + result.passed + ' / ' + result.total + ' passed';
+  }
+
+  var casesHtml = result.results.map(function(r) {
+    var cls = r.passed ? 'pass' : 'fail';
+    var badgeText = r.passed ? '\u2713 Pass' : '\u2717 Fail';
+    var bodyContent;
+    if (r.error) {
+      bodyContent =
+        '<div><div class="test-field-label">Error</div><div class="test-field-val error">' + escHtml(r.error) + '</div></div>' +
+        '<div><div class="test-field-label">Input</div><div class="test-field-val">' + escHtml(r.input || '(none)') + '</div></div>';
+    } else {
+      bodyContent =
+        '<div><div class="test-field-label">Input</div><div class="test-field-val">' + escHtml(r.input || '(none)') + '</div></div>' +
+        '<div><div class="test-field-label">Expected</div><div class="test-field-val">' + escHtml(r.expected) + '</div></div>' +
+        (!r.passed ? '<div style="grid-column:1/-1"><div class="test-field-label">Got</div><div class="test-field-val error">' + escHtml(r.got || '(no output)') + '</div></div>' : '');
+    }
+    return '<div class="test-case ' + cls + '">' +
+      '<div class="test-case-header" onclick="toggleTestCase(this)">' +
+        '<span class="test-case-label">Test ' + r.index + '</span>' +
+        '<span class="test-case-badge ' + cls + '">' + badgeText + '</span>' +
+      '</div>' +
+      '<div class="test-case-body' + (!r.passed ? ' open' : '') + '">' + bodyContent + '</div>' +
+    '</div>';
+  }).join('');
+
+  container.innerHTML =
+    '<div class="test-results">' +
+      '<div class="test-results-header">' +
+        '<span class="test-results-summary ' + summaryClass + '">' + summaryText + '</span>' +
+      '</div>' +
+      casesHtml +
+    '</div>';
+}
+
+function toggleTestCase(header) {
+  var body = header.nextElementSibling;
+  if (body) body.classList.toggle('open');
 }
 
 async function submitSolution(qid) {
-  const code = document.getElementById('sub-code').value.trim();
-  const language = document.getElementById('sub-lang').value;
-  const notes = document.getElementById('sub-notes').value.trim();
+  var codeEl = document.getElementById('sub-code');
+  var langEl = document.getElementById('sub-lang');
+  var notesEl = document.getElementById('sub-notes');
+  var code = codeEl ? codeEl.value.trim() : '';
+  var language = langEl ? langEl.value : 'go';
+  var notes = notesEl ? notesEl.value.trim() : '';
   if (!code) { showToast('Code is required', 'error'); return; }
-  const res = await apiFetch('/api/submissions', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({question_id: qid, code, language, notes})
-  });
-  if (!res.ok) { showToast(await res.text(), 'error'); return; }
-  showToast('Solution submitted!', 'success');
-  // Auto-mark complete
-  completedIds.add(qid);
-  savecompleted();
-  updateProgress();
-  renderQuestionList();
-  const btn = document.getElementById('complete-btn');
-  if (btn) { btn.textContent = '✓ Completed'; btn.classList.add('done'); }
-  document.getElementById('sub-code').value = '';
-  document.getElementById('sub-notes').value = '';
-  loadSubmissions(qid);
+
+  var submitBtn = document.getElementById('submit-btn');
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    var res = await apiFetch('/api/submissions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question_id: qid, code: code, language: language, notes: notes})
+    });
+    if (!res.ok) { showToast(await res.text(), 'error'); return; }
+    showToast('Solution submitted!', 'success');
+    completedIds.add(qid);
+    saveCompleted();
+    updateProgress();
+    renderQuestionList();
+    var btn = document.getElementById('complete-btn');
+    if (btn) { btn.innerHTML = '&#x2713; Completed'; btn.classList.add('done'); }
+    if (codeEl) codeEl.value = '';
+    if (notesEl) notesEl.value = '';
+    loadSubmissions(qid);
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
 }
 
 // ── LEADERBOARD ───────────────────────────────────────────
 async function loadLeaderboard() {
-  const res = await apiFetch('/api/leaderboard');
-  const board = await res.json();
-  const ranks = ['gold','silver','bronze'];
-  document.getElementById('lb-body').innerHTML = board.map((c,i) => `
-    <tr>
-      <td><span class="lb-rank ${ranks[i]||''}">${i<3?['🥇','🥈','🥉'][i]:i+1}</span></td>
-      <td><span class="lb-name">${escHtml(c.author_name)}</span></td>
-      <td><span style="font-family:var(--font-mono)">${c.submission_count}</span></td>
-      <td>${starsHtml(c.avg_rating)} <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${c.avg_rating.toFixed(1)}</span></td>
-      <td><span style="font-family:var(--font-mono)">${c.total_reviews}</span></td>
-      <td>${c.user_id && c.user_id !== currentUser.id ? `
-        <button class="follow-btn ${followingIds.has(c.user_id)?'following':''}" id="fb-${c.user_id}" onclick="toggleFollow(${c.user_id},this)">
-          ${followingIds.has(c.user_id)?'✓ Following':'+ Follow'}
-        </button>` : '—'}
-      </td>
-    </tr>
-  `).join('');
+  try {
+    var res = await apiFetch('/api/leaderboard');
+    if (!res.ok) return;
+    var board = await res.json();
+    var ranks = ['gold', 'silver', 'bronze'];
+    var medals = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49'];
+    document.getElementById('lb-body').innerHTML = board.map(function(c, i) {
+      return '<tr>' +
+        '<td><span class="lb-rank ' + (ranks[i] || '') + '">' + (i < 3 ? medals[i] : i + 1) + '</span></td>' +
+        '<td><span class="lb-name">' + escHtml(c.author_name) + '</span></td>' +
+        '<td><span style="font-family:var(--font-mono)">' + c.submission_count + '</span></td>' +
+        '<td>' + starsHtml(c.avg_rating) + ' <span style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">' + c.avg_rating.toFixed(1) + '</span></td>' +
+        '<td><span style="font-family:var(--font-mono)">' + c.total_reviews + '</span></td>' +
+        '<td>' + (c.user_id && c.user_id !== currentUser.id ?
+          '<button class="follow-btn ' + (followingIds.has(c.user_id) ? 'following' : '') + '" id="fb-' + c.user_id + '" onclick="toggleFollow(' + c.user_id + ',this)">' +
+            (followingIds.has(c.user_id) ? '&#x2713; Following' : '+ Follow') +
+          '</button>' : '\u2014') +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  } catch(e) {}
 }
 
 // ── FOLLOWING ─────────────────────────────────────────────
 async function loadFollowing() {
-  const res = await apiFetch('/api/follows');
-  if (!res.ok) return;
-  const ids = await res.json();
-  followingIds = new Set(ids);
+  try {
+    var res = await apiFetch('/api/follows');
+    if (!res.ok) return;
+    var ids = await res.json();
+    followingIds = new Set(ids);
+  } catch(e) {}
 }
 
 async function toggleFollow(uid, btn) {
-  const isFollowing = followingIds.has(uid);
-  const method = isFollowing ? 'DELETE' : 'POST';
-  const res = await apiFetch('/api/follows', {
-    method, headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({followee_id: uid})
-  });
-  if (!res.ok) return;
-  if (isFollowing) { followingIds.delete(uid); btn.textContent = '+ Follow'; btn.classList.remove('following'); }
-  else { followingIds.add(uid); btn.textContent = '✓ Following'; btn.classList.add('following'); }
+  var isFollowing = followingIds.has(uid);
+  try {
+    var res = await apiFetch('/api/follows', {
+      method: isFollowing ? 'DELETE' : 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({followee_id: uid})
+    });
+    if (!res.ok) return;
+    if (isFollowing) {
+      followingIds.delete(uid);
+      btn.textContent = '+ Follow';
+      btn.classList.remove('following');
+    } else {
+      followingIds.add(uid);
+      btn.textContent = '\u2713 Following';
+      btn.classList.add('following');
+    }
+  } catch(e) {}
 }
 
 // ── SEARCH ────────────────────────────────────────────────
 async function doSearch() {
-  const name = document.getElementById('search-input').value.trim();
+  var name = document.getElementById('search-input').value.trim();
   if (!name) return;
-  const res = await apiFetch(`/api/search?name=${encodeURIComponent(name)}`);
-  if (!res.ok) return;
-  const results = await res.json();
-  const el = document.getElementById('search-results');
-  if (!results.length) { el.innerHTML = '<div style="font-family:var(--font-mono);font-size:13px;color:var(--muted);text-align:center;padding:40px">No users found</div>'; return; }
-  el.innerHTML = results.map(r => `
-    <div class="user-result">
-      <div class="user-result-header">
-        <div>
-          <div class="user-result-name">${escHtml(r.user.name)}</div>
-          <div class="user-result-meta">${r.submissions.length} solution${r.submissions.length!==1?'s':''} submitted</div>
-        </div>
-        ${r.user.id !== currentUser.id ? `
-          <button class="follow-btn ${followingIds.has(r.user.id)?'following':''}" onclick="toggleFollow(${r.user.id},this)">
-            ${followingIds.has(r.user.id)?'✓ Following':'+ Follow'}
-          </button>` : ''}
-      </div>
-      <div class="user-result-subs">
-        ${r.submissions.length ? r.submissions.map(s => {
-          const q = questions.find(x=>x.id===s.question_id);
-          return `<div class="mini-sub">
-            <div>
-              <div class="mini-sub-title">${q?escHtml(q.title):`Question #${s.question_id}`}</div>
-              <span class="sub-lang">${escHtml(s.language)}</span>
-            </div>
-            <span class="mini-sub-rating">${starsHtml(s.avg_rating)} ${s.avg_rating.toFixed(1)}</span>
-          </div>`;
-        }).join('') : '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">No submissions yet</div>'}
-      </div>
-    </div>
-  `).join('');
+  try {
+    var res = await apiFetch('/api/search?name=' + encodeURIComponent(name));
+    if (!res.ok) return;
+    var results = await res.json();
+    var el = document.getElementById('search-results');
+    if (!results || !results.length) {
+      el.innerHTML = '<div style="font-family:var(--font-mono);font-size:13px;color:var(--muted);text-align:center;padding:40px">No users found</div>';
+      return;
+    }
+    el.innerHTML = results.map(function(r) {
+      var subsHtml = r.submissions && r.submissions.length
+        ? r.submissions.map(function(s) {
+            var q = questions.find(function(x) { return x.id === s.question_id; });
+            return '<div class="mini-sub">' +
+              '<div>' +
+                '<div class="mini-sub-title">' + (q ? escHtml(q.title) : 'Question #' + s.question_id) + '</div>' +
+                '<span class="sub-lang">' + escHtml(s.language) + '</span>' +
+              '</div>' +
+              '<span class="mini-sub-rating">' + starsHtml(s.avg_rating) + ' ' + s.avg_rating.toFixed(1) + '</span>' +
+            '</div>';
+          }).join('')
+        : '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">No submissions yet</div>';
+
+      return '<div class="user-result">' +
+        '<div class="user-result-header">' +
+          '<div>' +
+            '<div class="user-result-name">' + escHtml(r.user.name) + '</div>' +
+            '<div class="user-result-meta">' + r.submissions.length + ' solution' + (r.submissions.length !== 1 ? 's' : '') + ' submitted</div>' +
+          '</div>' +
+          (r.user.id !== currentUser.id ?
+            '<button class="follow-btn ' + (followingIds.has(r.user.id) ? 'following' : '') + '" onclick="toggleFollow(' + r.user.id + ',this)">' +
+              (followingIds.has(r.user.id) ? '\u2713 Following' : '+ Follow') +
+            '</button>' : '') +
+        '</div>' +
+        '<div class="user-result-subs">' + subsHtml + '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {}
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────
 async function checkNotifications() {
-  const res = await apiFetch('/api/notifications');
-  if (!res.ok) return;
-  const notifs = await res.json();
-  if (notifs.length) document.getElementById('notif-dot').style.display = 'inline-block';
+  try {
+    var res = await apiFetch('/api/notifications');
+    if (!res.ok) return;
+    var notifs = await res.json();
+    if (notifs && notifs.length) document.getElementById('notif-dot').style.display = 'inline-block';
+  } catch(e) {}
 }
 
 async function loadNotifications() {
-  const res = await apiFetch('/api/notifications');
-  if (!res.ok) return;
-  const notifs = await res.json();
-  document.getElementById('notif-dot').style.display = 'none';
-  const el = document.getElementById('notif-list');
-  if (!notifs.length) {
-    el.innerHTML = '<div style="font-family:var(--font-mono);font-size:13px;color:var(--muted);text-align:center;padding:60px">Follow other hackers to see their activity here</div>';
-    return;
-  }
-  el.innerHTML = notifs.map(n => `
-    <div class="notif-item">
-      <div class="notif-top">
-        <span class="notif-who">${escHtml(n.submission.author_name)}</span>
-        <span class="notif-when">${timeAgo(n.submission.created_at)}</span>
-      </div>
-      <div class="notif-q">${escHtml(n.question.title)}</div>
-      <span class="notif-lang">${escHtml(n.submission.language)}</span>
-      <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-left:8px">${n.question.difficulty}</span>
-    </div>
-  `).join('');
+  try {
+    var res = await apiFetch('/api/notifications');
+    if (!res.ok) return;
+    var notifs = await res.json();
+    document.getElementById('notif-dot').style.display = 'none';
+    var el = document.getElementById('notif-list');
+    if (!notifs || !notifs.length) {
+      el.innerHTML = '<div style="font-family:var(--font-mono);font-size:13px;color:var(--muted);text-align:center;padding:60px">Follow other hackers to see their activity here</div>';
+      return;
+    }
+    el.innerHTML = notifs.map(function(n) {
+      return '<div class="notif-item">' +
+        '<div class="notif-top">' +
+          '<span class="notif-who">' + escHtml(n.submission.author_name) + '</span>' +
+          '<span class="notif-when">' + timeAgo(n.submission.created_at) + '</span>' +
+        '</div>' +
+        '<div class="notif-q">' + escHtml(n.question.title) + '</div>' +
+        '<span class="notif-lang">' + escHtml(n.submission.language) + '</span>' +
+        '<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted);margin-left:8px">' + n.question.difficulty + '</span>' +
+      '</div>';
+    }).join('');
+  } catch(e) {}
 }
 
 // ── ADMIN ─────────────────────────────────────────────────
 async function loadAdminPanel() {
-  const [usersRes, qRes] = await Promise.all([
-    apiFetch('/api/admin/users'),
-    apiFetch('/api/questions')
-  ]);
-  const users = await usersRes.json();
-  const qs = await qRes.json();
+  try {
+    var results = await Promise.all([apiFetch('/api/admin/users'), apiFetch('/api/questions')]);
+    var usersRes = results[0], qRes = results[1];
+    if (!usersRes.ok || !qRes.ok) return;
+    var users = await usersRes.json();
+    var qs = await qRes.json();
 
-  document.getElementById('admin-user-list').innerHTML = users.map(u => `
-    <div class="admin-item">
-      <div class="admin-item-info">
-        <div class="admin-item-name">${escHtml(u.name)} ${u.is_admin?'<span style="font-size:10px;color:var(--accent3)">[ADMIN]</span>':''}</div>
-        <div class="admin-item-sub">${escHtml(u.email)}</div>
-      </div>
-      <div class="admin-item-actions">
-        ${u.id !== currentUser.id ? `
-          <button class="btn-sm ${u.is_admin?'btn-sm-muted':'btn-sm-success'}" onclick="adminToggleAdmin(${u.id},${!u.is_admin})">
-            ${u.is_admin?'Demote':'Make Admin'}
-          </button>
-          <button class="btn-sm btn-sm-danger" onclick="adminDeleteUser(${u.id})">Delete</button>
-        ` : '<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">You</span>'}
-      </div>
-    </div>
-  `).join('');
+    document.getElementById('admin-user-list').innerHTML = users.map(function(u) {
+      return '<div class="admin-item">' +
+        '<div class="admin-item-info">' +
+          '<div class="admin-item-name">' + escHtml(u.name) +
+            (u.is_admin ? ' <span style="font-size:10px;color:var(--accent3)">[ADMIN]</span>' : '') +
+          '</div>' +
+          '<div class="admin-item-sub">' + escHtml(u.email) + '</div>' +
+        '</div>' +
+        '<div class="admin-item-actions">' +
+          (u.id !== currentUser.id ?
+            '<button class="btn-sm ' + (u.is_admin ? 'btn-sm-muted' : 'btn-sm-success') + '" onclick="adminToggleAdmin(' + u.id + ',' + !u.is_admin + ')">' +
+              (u.is_admin ? 'Demote' : 'Make Admin') +
+            '</button>' +
+            '<button class="btn-sm btn-sm-danger" onclick="adminDeleteUser(' + u.id + ')">Delete</button>'
+          : '<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">You</span>') +
+        '</div>' +
+      '</div>';
+    }).join('');
 
-  document.getElementById('admin-q-list').innerHTML = qs.map(q => `
-    <div class="admin-item">
-      <div class="admin-item-info">
-        <div class="admin-item-name">${escHtml(q.title)}</div>
-        <div class="admin-item-sub">${q.difficulty} · ${escHtml(q.category)}</div>
-      </div>
-      <div class="admin-item-actions">
-        <button class="btn-sm ${q.visible?'btn-sm-success':'btn-sm-muted'}" onclick="adminToggleVisibilityFromPanel(${q.id},${!q.visible},this)">
-          ${q.visible?'👁 Visible':'👁 Hidden'}
-        </button>
-        <button class="btn-sm btn-sm-danger" onclick="adminDeleteQuestion(${q.id})">Delete</button>
-      </div>
-    </div>
-  `).join('');
+    document.getElementById('admin-q-list').innerHTML = qs.map(function(q) {
+      return '<div class="admin-item">' +
+        '<div class="admin-item-info">' +
+          '<div class="admin-item-name">' + escHtml(q.title) + '</div>' +
+          '<div class="admin-item-sub">' + q.difficulty + ' \u00B7 ' + escHtml(q.category) + '</div>' +
+        '</div>' +
+        '<div class="admin-item-actions">' +
+          '<button class="btn-sm ' + (q.visible ? 'btn-sm-success' : 'btn-sm-muted') + '" onclick="adminToggleVisibilityFromPanel(' + q.id + ',' + !q.visible + ',this)">' +
+            (q.visible ? '&#x1F441; Visible' : '&#x1F441; Hidden') +
+          '</button>' +
+          '<button class="btn-sm btn-sm-danger" onclick="adminDeleteQuestion(' + q.id + ')">Delete</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  } catch(e) {}
 }
 
 async function adminDeleteUser(id) {
   if (!confirm('Delete this user? This cannot be undone.')) return;
-  const res = await apiFetch('/api/admin/users', {
-    method:'DELETE', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id})
-  });
-  if (res.ok) { showToast('User deleted', 'success'); loadAdminPanel(); }
-  else { showToast(await res.text(), 'error'); }
+  try {
+    var res = await apiFetch('/api/admin/users', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: id})
+    });
+    if (res.ok) { showToast('User deleted', 'success'); loadAdminPanel(); }
+    else { showToast(await res.text(), 'error'); }
+  } catch(e) { showToast('Error deleting user', 'error'); }
 }
 
 async function adminToggleAdmin(id, makeAdmin) {
-  const res = await apiFetch('/api/admin/promote', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id, is_admin: makeAdmin})
-  });
-  if (res.ok) { showToast(makeAdmin?'Promoted to admin':'Demoted', 'success'); loadAdminPanel(); }
-  else { showToast(await res.text(), 'error'); }
+  try {
+    var res = await apiFetch('/api/admin/promote', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: id, is_admin: makeAdmin})
+    });
+    if (res.ok) { showToast(makeAdmin ? 'Promoted to admin' : 'Demoted', 'success'); loadAdminPanel(); }
+    else { showToast(await res.text(), 'error'); }
+  } catch(e) {}
 }
 
 async function adminToggleVisibility(qid) {
-  const q = questions.find(x=>x.id===qid);
+  var q = questions.find(function(x) { return x.id === qid; });
   if (!q) return;
-  const newVis = !q.visible;
-  const res = await apiFetch('/api/questions/visibility', {
-    method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id: qid, visible: newVis})
-  });
-  if (res.ok) {
-    q.visible = newVis;
-    showToast(newVis?'Question is now visible':'Question hidden', 'success');
-    const btn = document.getElementById('vis-btn');
-    if (btn) {
-      btn.textContent = newVis ? '👁 Visible' : '👁 Hidden';
-      btn.className = 'btn-action ' + (newVis ? 'btn-vis' : 'btn-vis hidden');
-    }
-    renderQuestionList();
-    assignQuestionTimers();
-  } else { showToast(await res.text(), 'error'); }
+  var newVis = !q.visible;
+  try {
+    var res = await apiFetch('/api/questions/visibility', {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: qid, visible: newVis})
+    });
+    if (res.ok) {
+      q.visible = newVis;
+      // Assign timer for newly visible question (won't overwrite existing)
+      if (newVis) assignQuestionTimers();
+      showToast(newVis ? 'Question is now visible' : 'Question hidden', 'success');
+      var btn = document.getElementById('vis-btn');
+      if (btn) {
+        btn.innerHTML = newVis ? '&#x1F441; Visible' : '&#x1F441; Hidden';
+        btn.className = 'btn-action ' + (newVis ? 'btn-vis' : 'btn-vis hidden');
+      }
+      renderQuestionList();
+    } else { showToast(await res.text(), 'error'); }
+  } catch(e) {}
 }
 
 async function adminToggleVisibilityFromPanel(qid, newVis, btn) {
-  const res = await apiFetch('/api/questions/visibility', {
-    method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id: qid, visible: newVis})
-  });
-  if (res.ok) {
-    const q = questions.find(x=>x.id===qid);
-    if (q) q.visible = newVis;
-    btn.textContent = newVis ? '👁 Visible' : '👁 Hidden';
-    btn.className = 'btn-sm ' + (newVis?'btn-sm-success':'btn-sm-muted');
-    showToast(newVis?'Question visible':'Question hidden', 'success');
-    renderQuestionList();
-    assignQuestionTimers();
-  } else { showToast(await res.text(), 'error'); }
+  try {
+    var res = await apiFetch('/api/questions/visibility', {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: qid, visible: newVis})
+    });
+    if (res.ok) {
+      var q = questions.find(function(x) { return x.id === qid; });
+      if (q) {
+        q.visible = newVis;
+        if (newVis) assignQuestionTimers();
+      }
+      btn.innerHTML = newVis ? '&#x1F441; Visible' : '&#x1F441; Hidden';
+      btn.className = 'btn-sm ' + (newVis ? 'btn-sm-success' : 'btn-sm-muted');
+      showToast(newVis ? 'Question visible' : 'Question hidden', 'success');
+      renderQuestionList();
+    } else { showToast(await res.text(), 'error'); }
+  } catch(e) {}
 }
 
 async function adminDeleteQuestion(qid) {
   if (!confirm('Delete this question? All submissions will also be deleted.')) return;
-  const res = await apiFetch('/api/questions/delete', {
-    method:'DELETE', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id: qid})
-  });
-  if (res.ok) {
-    questions = questions.filter(q=>q.id!==qid);
-    showToast('Question deleted', 'success');
-    if (currentQuestion && currentQuestion.id === qid) {
-      document.getElementById('detail-pane').innerHTML = `<div class="empty-state"><div class="empty-state-icon">{_}</div><div class="empty-state-text">Question deleted</div></div>`;
-      currentQuestion = null;
-    }
-    renderQuestionList();
-    loadAdminPanel();
-  } else { showToast(await res.text(), 'error'); }
+  try {
+    var res = await apiFetch('/api/questions/delete', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: qid})
+    });
+    if (res.ok) {
+      questions = questions.filter(function(q) { return q.id !== qid; });
+      // Clean up timer for deleted question
+      delete questionTimers[qid];
+      showToast('Question deleted', 'success');
+      if (currentQuestion && currentQuestion.id === qid) {
+        document.getElementById('detail-pane').innerHTML =
+          '<div class="empty-state"><div class="empty-state-icon">{_}</div><div class="empty-state-text">Question deleted</div></div>';
+        currentQuestion = null;
+      }
+      renderQuestionList();
+      updateProgress();
+      // Refresh admin panel if it's the active tab
+      var adminTab = document.getElementById('tab-admin');
+      if (adminTab && adminTab.style.display !== 'none') loadAdminPanel();
+    } else { showToast(await res.text(), 'error'); }
+  } catch(e) { showToast('Error deleting question', 'error'); }
 }
 
 async function adminAddQuestion() {
-  const title = document.getElementById('aq-title').value.trim();
-  const description = document.getElementById('aq-desc').value.trim();
-  const difficulty = document.getElementById('aq-diff').value;
-  const category = document.getElementById('aq-cat').value.trim() || 'General';
-  const hint_url = document.getElementById('aq-hurl').value.trim() || 'https://pkg.go.dev';
-  const hint_text = document.getElementById('aq-htxt').value.trim() || 'Go documentation';
+  var title = document.getElementById('aq-title').value.trim();
+  var description = document.getElementById('aq-desc').value.trim();
+  var difficulty = document.getElementById('aq-diff').value;
+  var category = document.getElementById('aq-cat').value.trim() || 'General';
+  var hint_url = document.getElementById('aq-hurl').value.trim() || 'https://pkg.go.dev';
+  var hint_text = document.getElementById('aq-htxt').value.trim() || 'Go documentation';
+  var testCasesRaw = document.getElementById('aq-tests').value.trim() || '[]';
+
   if (!title || !description) { showToast('Title and description required', 'error'); return; }
-  const res = await apiFetch('/api/questions', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({title, description, difficulty, category, hint_url, hint_text})
-  });
-  if (res.ok) {
-    const q = await res.json();
-    questions.push(q);
-    showToast('Question added', 'success');
-    document.getElementById('aq-title').value = '';
-    document.getElementById('aq-desc').value = '';
-    document.getElementById('aq-cat').value = '';
-    document.getElementById('aq-hurl').value = '';
-    document.getElementById('aq-htxt').value = '';
-    renderQuestionList();
-    loadAdminPanel();
-  } else { showToast(await res.text(), 'error'); }
+
+  try {
+    var parsed = JSON.parse(testCasesRaw);
+    if (!Array.isArray(parsed)) throw new Error('not an array');
+  } catch(e) {
+    showToast('Test cases must be a valid JSON array, e.g. [{"input":"hi","expected":"HI"}]', 'error');
+    return;
+  }
+
+  try {
+    var res = await apiFetch('/api/questions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        title: title, description: description, difficulty: difficulty,
+        category: category, hint_url: hint_url, hint_text: hint_text,
+        test_cases: testCasesRaw
+      })
+    });
+    if (res.ok) {
+      var q = await res.json();
+      questions.push(q);
+      showToast('Question added', 'success');
+      ['aq-title','aq-desc','aq-cat','aq-hurl','aq-htxt','aq-tests'].forEach(function(id) {
+        document.getElementById(id).value = '';
+      });
+      renderQuestionList();
+      loadAdminPanel();
+    } else { showToast(await res.text(), 'error'); }
+  } catch(e) { showToast('Error adding question', 'error'); }
 }
 
 // ── TAB SWITCHING ─────────────────────────────────────────
 function switchTab(name) {
-  document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display='none');
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tab-'+name).style.display = '';
-  document.querySelector(`[data-tab="${name}"]`).classList.add('active');
-  if (name==='leaderboard') loadLeaderboard();
-  if (name==='notifications') loadNotifications();
-  if (name==='admin') loadAdminPanel();
+  document.querySelectorAll('[id^="tab-"]').forEach(function(el) { el.style.display = 'none'; });
+  document.querySelectorAll('.nav-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.getElementById('tab-' + name).style.display = '';
+  document.querySelector('[data-tab="' + name + '"]').classList.add('active');
+  if (name === 'leaderboard') loadLeaderboard();
+  if (name === 'notifications') loadNotifications();
+  if (name === 'admin') loadAdminPanel();
 }
 
 // ── UTILS ─────────────────────────────────────────────────
 function escHtml(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function fmtDesc(s) {
-  return escHtml(s)
-    .replace(/`([^`]+)`/g, '<code style="font-family:var(--font-mono);font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;color:var(--accent)">$1</code>')
-    .replace(/\n/g, '<br/>');
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function starsHtml(avg) {
-  const full = Math.round(avg);
-  return [1,2,3,4,5].map(i => `<span style="color:${i<=full?'var(--warn)':'var(--muted)'}">${i<=full?'★':'☆'}</span>`).join('');
+  var full = Math.round(avg);
+  return [1,2,3,4,5].map(function(i) {
+    return '<span style="color:' + (i <= full ? 'var(--warn)' : 'var(--muted)') + '">' + (i <= full ? '\u2605' : '\u2606') + '</span>';
+  }).join('');
 }
 
 function timeAgo(dateStr) {
-  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
+  var diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
   if (diff < 60) return 'just now';
-  if (diff < 3600) return Math.floor(diff/60)+'m ago';
-  if (diff < 86400) return Math.floor(diff/3600)+'h ago';
-  return Math.floor(diff/86400)+'d ago';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  return Math.floor(diff / 86400) + 'd ago';
 }
 
-function showToast(msg, type='success') {
-  const t = document.createElement('div');
-  t.className = `toast ${type}`;
+function showToast(msg, type) {
+  type = type || 'success';
+  var t = document.createElement('div');
+  t.className = 'toast ' + type;
   t.textContent = msg;
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3200);
+  setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 3200);
 }
 </script>
+
+<style>
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;z-index:9999;animation:toast-in .3s ease;max-width:320px}
+.toast.success{background:#0d2a1a;border:1px solid var(--accent2);color:var(--accent2)}
+.toast.error{background:#2a0d0d;border:1px solid var(--hard);color:var(--hard)}
+@keyframes toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+</style>
 </body>
 </html>

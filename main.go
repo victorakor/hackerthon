@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
@@ -9,7 +11,11 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -34,6 +40,7 @@ type Question struct {
 	HintURL     string `json:"hint_url"`
 	HintText    string `json:"hint_text"`
 	Visible     bool   `json:"visible"`
+	TestCases   string `json:"test_cases"` // JSON array of {input, expected}
 }
 
 type Submission struct {
@@ -65,6 +72,27 @@ type Contributor struct {
 	SubmissionCount int     `json:"submission_count"`
 	AvgRating       float64 `json:"avg_rating"`
 	TotalReviews    int     `json:"total_reviews"`
+}
+
+type TestCase struct {
+	Input    string `json:"input"`
+	Expected string `json:"expected"`
+}
+
+type TestResult struct {
+	Index    int    `json:"index"`
+	Passed   bool   `json:"passed"`
+	Input    string `json:"input"`
+	Expected string `json:"expected"`
+	Got      string `json:"got"`
+	Error    string `json:"error,omitempty"`
+}
+
+type RunResult struct {
+	Passed    int          `json:"passed"`
+	Total     int          `json:"total"`
+	AllPassed bool         `json:"all_passed"`
+	Results   []TestResult `json:"results"`
 }
 
 var db *sql.DB
@@ -156,6 +184,8 @@ func createTables() error {
 	// Add user_id columns if they don't exist
 	db.Exec(`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
 	db.Exec(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
+	// Add test_cases column for code validation
+	db.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_cases TEXT NOT NULL DEFAULT '[]'`)
 
 	if err := seedAdminUser(); err != nil {
 		log.Printf("admin seed: %v", err)
@@ -370,7 +400,6 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
-	// Count unique questions answered
 	var answered int
 	db.QueryRow(`SELECT COUNT(DISTINCT question_id) FROM submissions WHERE user_id=$1`, u.ID).Scan(&answered)
 	w.Header().Set("Content-Type", "application/json")
@@ -437,13 +466,13 @@ func handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", 405)
 	}
 }
+
 func handleAdminPromote(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", 405)
 		return
 	}
-	admin := requireAdmin(w, r)
-	if admin == nil {
+	if requireAdmin(w, r) == nil {
 		return
 	}
 	var body struct {
@@ -452,11 +481,6 @@ func handleAdminPromote(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON", 400)
-		return
-	}
-	// ← ADD THIS
-	if body.ID == admin.ID && !body.IsAdmin {
-		http.Error(w, "cannot remove your own admin status", 400)
 		return
 	}
 	_, err := db.Exec(`UPDATE users SET is_admin=$1 WHERE id=$2`, body.IsAdmin, body.ID)
@@ -475,11 +499,9 @@ func handleQuestions(w http.ResponseWriter, r *http.Request) {
 		var rows *sql.Rows
 		var err error
 		if u != nil && u.IsAdmin {
-			// Admin sees all questions
-			rows, err = db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text,visible FROM questions ORDER BY id`)
+			rows, err = db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text,visible,COALESCE(test_cases,'[]') FROM questions ORDER BY id`)
 		} else {
-			// Normal users only see visible questions
-			rows, err = db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text,visible FROM questions WHERE visible=TRUE ORDER BY id`)
+			rows, err = db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text,visible,COALESCE(test_cases,'[]') FROM questions WHERE visible=TRUE ORDER BY id`)
 		}
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -489,7 +511,7 @@ func handleQuestions(w http.ResponseWriter, r *http.Request) {
 		var qs []Question
 		for rows.Next() {
 			var q Question
-			rows.Scan(&q.ID, &q.Title, &q.Description, &q.Difficulty, &q.Category, &q.HintURL, &q.HintText, &q.Visible)
+			rows.Scan(&q.ID, &q.Title, &q.Description, &q.Difficulty, &q.Category, &q.HintURL, &q.HintText, &q.Visible, &q.TestCases)
 			qs = append(qs, q)
 		}
 		if qs == nil {
@@ -523,8 +545,17 @@ func handleQuestions(w http.ResponseWriter, r *http.Request) {
 		if q.HintText == "" {
 			q.HintText = "Go documentation"
 		}
-		err := db.QueryRow(`INSERT INTO questions (title,description,difficulty,category,hint_url,hint_text,visible) VALUES ($1,$2,$3,$4,$5,$6,FALSE) RETURNING id`,
-			q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText).Scan(&q.ID)
+		if q.TestCases == "" {
+			q.TestCases = "[]"
+		}
+		// Validate that test_cases is valid JSON
+		var tc []TestCase
+		if err := json.Unmarshal([]byte(q.TestCases), &tc); err != nil {
+			http.Error(w, "test_cases must be a valid JSON array", 400)
+			return
+		}
+		err := db.QueryRow(`INSERT INTO questions (title,description,difficulty,category,hint_url,hint_text,visible,test_cases) VALUES ($1,$2,$3,$4,$5,$6,FALSE,$7) RETURNING id`,
+			q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText, q.TestCases).Scan(&q.ID)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -810,7 +841,6 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Define UserProfile struct locally if not available globally
 	type UserProfile struct {
 		User        User         `json:"user"`
 		Submissions []Submission `json:"submissions"`
@@ -823,7 +853,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var results []UserProfile = []UserProfile{} // Initialize as correct type
+	var results []UserProfile = []UserProfile{}
 
 	for rows.Next() {
 		var u User
@@ -831,7 +861,6 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Use a helper function to process submissions so we can close rows immediately
 		var subs []Submission
 		func() {
 			subRows, err := db.Query(`
@@ -844,8 +873,7 @@ func handleSearch(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
-			defer subRows.Close() // Properly closes connection after this user is processed
-
+			defer subRows.Close()
 			for subRows.Next() {
 				var s Submission
 				subRows.Scan(&s.ID, &s.QuestionID, &s.UserID, &s.AuthorName, &s.Code, &s.Language, &s.Notes, &s.CreatedAt, &s.AvgRating, &s.ReviewCount)
@@ -981,6 +1009,193 @@ func handleNotifications(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(notifs)
 }
 
+// ── SANDBOX CODE RUNNER ───────────────────────────────────
+
+// execSemaphore limits concurrent code executions to protect Railway resources.
+// Max 3 simultaneous subprocesses — enough for a hackathon, safe on hobby plan.
+var execSemaphore = make(chan struct{}, 3)
+
+func runCode(language, code, input string) (stdout string, runErr string) {
+	// Acquire slot; if all 3 are busy, reject immediately (don't queue)
+	select {
+	case execSemaphore <- struct{}{}:
+		defer func() { <-execSemaphore }()
+	default:
+		return "", "server busy — too many concurrent executions, try again in a moment"
+	}
+
+	dir, err := os.MkdirTemp("", "run-*")
+	if err != nil {
+		return "", "failed to create temp dir"
+	}
+	defer os.RemoveAll(dir)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var cmd *exec.Cmd
+
+	switch language {
+	case "go":
+		f := filepath.Join(dir, "main.go")
+		if err := os.WriteFile(f, []byte(code), 0644); err != nil {
+			return "", "failed to write file"
+		}
+		cmd = exec.CommandContext(ctx, "go", "run", f)
+
+	case "python":
+		f := filepath.Join(dir, "main.py")
+		if err := os.WriteFile(f, []byte(code), 0644); err != nil {
+			return "", "failed to write file"
+		}
+		cmd = exec.CommandContext(ctx, "python3", f)
+
+	case "javascript":
+		f := filepath.Join(dir, "main.js")
+		if err := os.WriteFile(f, []byte(code), 0644); err != nil {
+			return "", "failed to write file"
+		}
+		cmd = exec.CommandContext(ctx, "node", "--max-old-space-size=64", f)
+
+	case "bash":
+		f := filepath.Join(dir, "main.sh")
+		if err := os.WriteFile(f, []byte(code), 0644); err != nil {
+			return "", "failed to write file"
+		}
+		cmd = exec.CommandContext(ctx, "bash", f)
+
+	default:
+		return "", fmt.Sprintf("language '%s' is not supported for test execution — submit without running to save anyway", language)
+	}
+
+	cmd.Stdin = bytes.NewBufferString(input)
+
+	// Put child in its own process group so the entire tree is killed on timeout,
+	// not just the immediate child process. This catches spawned goroutines,
+	// child processes from bash scripts, etc.
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
+
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	execErr := cmd.Run()
+
+	if ctx.Err() == context.DeadlineExceeded {
+		// Kill the entire process group to clean up any spawned children
+		if cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		return "", "time limit exceeded (10s)"
+	}
+	if execErr != nil {
+		// Compilation or runtime error — return stderr so the user sees it
+		errMsg := strings.TrimSpace(errBuf.String())
+		if errMsg == "" {
+			errMsg = execErr.Error()
+		}
+		return "", errMsg
+	}
+
+	return strings.TrimSpace(outBuf.String()), ""
+}
+
+// runAgainstTestCases runs code against all test cases for a question and returns results.
+func runAgainstTestCases(language, code string, testCases []TestCase) RunResult {
+	result := RunResult{Total: len(testCases)}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
+	results := make([]TestResult, len(testCases))
+
+	for i, tc := range testCases {
+		wg.Add(1)
+		go func(idx int, tc TestCase) {
+			defer wg.Done()
+			got, runErr := runCode(language, code, tc.Input)
+			tr := TestResult{
+				Index:    idx + 1,
+				Input:    tc.Input,
+				Expected: strings.TrimSpace(tc.Expected),
+				Got:      got,
+			}
+			if runErr != "" {
+				tr.Error = runErr
+				tr.Passed = false
+			} else {
+				tr.Passed = strings.TrimSpace(got) == strings.TrimSpace(tc.Expected)
+			}
+			mu.Lock()
+			results[idx] = tr
+			mu.Unlock()
+		}(i, tc)
+	}
+	wg.Wait()
+
+	result.Results = results
+	for _, r := range results {
+		if r.Passed {
+			result.Passed++
+		}
+	}
+	result.AllPassed = result.Passed == result.Total && result.Total > 0
+	return result
+}
+
+func handleRunCode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", 405)
+		return
+	}
+	u := requireAuth(w, r)
+	if u == nil {
+		return
+	}
+
+	var body struct {
+		QuestionID int    `json:"question_id"`
+		Code       string `json:"code"`
+		Language   string `json:"language"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON", 400)
+		return
+	}
+	if body.Code == "" {
+		http.Error(w, "code required", 400)
+		return
+	}
+
+	// Fetch test cases for this question
+	var testCasesJSON string
+	err := db.QueryRow(`SELECT COALESCE(test_cases,'[]') FROM questions WHERE id=$1`, body.QuestionID).Scan(&testCasesJSON)
+	if err != nil {
+		http.Error(w, "question not found", 404)
+		return
+	}
+
+	var testCases []TestCase
+	if err := json.Unmarshal([]byte(testCasesJSON), &testCases); err != nil || len(testCases) == 0 {
+		// No test cases defined — run the code once with empty input and return output only
+		out, runErr := runCode(body.Language, body.Code, "")
+		result := RunResult{Total: 0, Passed: 0, AllPassed: false}
+		if runErr != "" {
+			result.Results = []TestResult{{Index: 1, Error: runErr, Passed: false}}
+		} else {
+			result.Results = []TestResult{{Index: 1, Got: out, Passed: false, Error: "no test cases defined for this question — output shown above"}}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
+	result := runAgainstTestCases(body.Language, body.Code, testCases)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 // ── CORS + ROUTER ─────────────────────────────────────────
 func withCORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -1027,6 +1242,9 @@ func main() {
 
 	// Leaderboard
 	http.HandleFunc("/api/leaderboard", withCORS(handleLeaderboard))
+
+	// Code execution
+	http.HandleFunc("/api/run", withCORS(handleRunCode))
 
 	// Social
 	http.HandleFunc("/api/search", withCORS(handleSearch))
