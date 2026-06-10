@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -40,7 +41,8 @@ type Question struct {
 	HintURL     string `json:"hint_url"`
 	HintText    string `json:"hint_text"`
 	Visible     bool   `json:"visible"`
-	TestCases   string `json:"test_cases"` // JSON array of {input, expected}
+	TestCases   string `json:"test_cases"` // JSON array of {input, expected} — used by Python/JS/bash
+	TestFile    string `json:"test_file"`  // Full _test.go content — used by Go questions
 }
 
 type Submission struct {
@@ -179,13 +181,13 @@ func createTables() error {
 		return fmt.Errorf("creating tables: %w", err)
 	}
 
-	// Add visible column if it doesn't exist (migration for existing DBs)
+	// Migrations for existing DBs
 	db.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS visible BOOLEAN NOT NULL DEFAULT FALSE`)
-	// Add user_id columns if they don't exist
 	db.Exec(`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
 	db.Exec(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
-	// Add test_cases column for code validation
 	db.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_cases TEXT NOT NULL DEFAULT '[]'`)
+	// New: test_file stores full _test.go content for Go questions
+	db.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_file TEXT NOT NULL DEFAULT ''`)
 
 	if err := seedAdminUser(); err != nil {
 		log.Printf("admin seed: %v", err)
@@ -242,7 +244,7 @@ func seedQuestions() error {
 		{Title: "Full Pipeline: go-reloaded Mini", Description: "FINAL BOSS: Build a mini version of go-reloaded that handles ONLY these three transformations: (hex), (bin), and (up). Accept input/output filenames from os.Args. Read the input file, apply all three transformations in a single pass over the token slice, write the result. All edge cases handled.", Difficulty: "hard", Category: "Full Project", HintURL: "https://pkg.go.dev/strings", HintText: "Combine os, strings, strconv packages"},
 	}
 	for _, q := range seeds {
-		_, err := db.Exec(`INSERT INTO questions (title, description, difficulty, category, hint_url, hint_text, visible) VALUES ($1,$2,$3,$4,$5,$6,FALSE)`,
+		_, err := db.Exec(`INSERT INTO questions (title,description,difficulty,category,hint_url,hint_text,visible,test_cases,test_file) VALUES ($1,$2,$3,$4,$5,$6,FALSE,'[]','')`,
 			q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText)
 		if err != nil {
 			return fmt.Errorf("seeding %q: %w", q.Title, err)
@@ -499,9 +501,9 @@ func handleQuestions(w http.ResponseWriter, r *http.Request) {
 		var rows *sql.Rows
 		var err error
 		if u != nil && u.IsAdmin {
-			rows, err = db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text,visible,COALESCE(test_cases,'[]') FROM questions ORDER BY id`)
+			rows, err = db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text,visible,COALESCE(test_cases,'[]'),COALESCE(test_file,'') FROM questions ORDER BY id`)
 		} else {
-			rows, err = db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text,visible,COALESCE(test_cases,'[]') FROM questions WHERE visible=TRUE ORDER BY id`)
+			rows, err = db.Query(`SELECT id,title,description,difficulty,category,hint_url,hint_text,visible,COALESCE(test_cases,'[]'),COALESCE(test_file,'') FROM questions WHERE visible=TRUE ORDER BY id`)
 		}
 		if err != nil {
 			http.Error(w, err.Error(), 500)
@@ -511,7 +513,7 @@ func handleQuestions(w http.ResponseWriter, r *http.Request) {
 		var qs []Question
 		for rows.Next() {
 			var q Question
-			rows.Scan(&q.ID, &q.Title, &q.Description, &q.Difficulty, &q.Category, &q.HintURL, &q.HintText, &q.Visible, &q.TestCases)
+			rows.Scan(&q.ID, &q.Title, &q.Description, &q.Difficulty, &q.Category, &q.HintURL, &q.HintText, &q.Visible, &q.TestCases, &q.TestFile)
 			qs = append(qs, q)
 		}
 		if qs == nil {
@@ -548,14 +550,18 @@ func handleQuestions(w http.ResponseWriter, r *http.Request) {
 		if q.TestCases == "" {
 			q.TestCases = "[]"
 		}
-		// Validate that test_cases is valid JSON
+		// Validate test_cases is valid JSON when provided
 		var tc []TestCase
 		if err := json.Unmarshal([]byte(q.TestCases), &tc); err != nil {
 			http.Error(w, "test_cases must be a valid JSON array", 400)
 			return
 		}
-		err := db.QueryRow(`INSERT INTO questions (title,description,difficulty,category,hint_url,hint_text,visible,test_cases) VALUES ($1,$2,$3,$4,$5,$6,FALSE,$7) RETURNING id`,
-			q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText, q.TestCases).Scan(&q.ID)
+		// test_file is stored as-is (plain Go test source); no validation needed here
+		err := db.QueryRow(
+			`INSERT INTO questions (title,description,difficulty,category,hint_url,hint_text,visible,test_cases,test_file)
+			 VALUES ($1,$2,$3,$4,$5,$6,FALSE,$7,$8) RETURNING id`,
+			q.Title, q.Description, q.Difficulty, q.Category, q.HintURL, q.HintText, q.TestCases, q.TestFile,
+		).Scan(&q.ID)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -1011,18 +1017,24 @@ func handleNotifications(w http.ResponseWriter, r *http.Request) {
 
 // ── SANDBOX CODE RUNNER ───────────────────────────────────
 
-// execSemaphore limits concurrent code executions to protect Railway resources.
-// Max 3 simultaneous subprocesses — enough for a hackathon, safe on hobby plan.
+// execSemaphore limits concurrent code executions to protect server resources.
 var execSemaphore = make(chan struct{}, 10)
 
-func runCode(language, code, input string) (stdout string, runErr string) {
-	// Acquire slot; if all 3 are busy, reject immediately (don't queue)
+// acquireSemaphore tries to acquire a slot within 5 seconds, returns false if busy.
+func acquireSemaphore() bool {
 	select {
 	case execSemaphore <- struct{}{}:
-		defer func() { <-execSemaphore }()
+		return true
 	case <-time.After(5 * time.Second):
+		return false
+	}
+}
+
+func runCode(language, code, input string) (stdout string, runErr string) {
+	if !acquireSemaphore() {
 		return "", "server busy — too many concurrent executions, try again in a moment"
 	}
+	defer func() { <-execSemaphore }()
 
 	dir, err := os.MkdirTemp("", "run-*")
 	if err != nil {
@@ -1069,13 +1081,7 @@ func runCode(language, code, input string) (stdout string, runErr string) {
 	}
 
 	cmd.Stdin = bytes.NewBufferString(input)
-
-	// Put child in its own process group so the entire tree is killed on timeout,
-	// not just the immediate child process. This catches spawned goroutines,
-	// child processes from bash scripts, etc.
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
-	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -1084,14 +1090,12 @@ func runCode(language, code, input string) (stdout string, runErr string) {
 	execErr := cmd.Run()
 
 	if ctx.Err() == context.DeadlineExceeded {
-		// Kill the entire process group to clean up any spawned children
 		if cmd.Process != nil {
 			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		}
 		return "", "time limit exceeded (10s)"
 	}
 	if execErr != nil {
-		// Compilation or runtime error — return stderr so the user sees it
 		errMsg := strings.TrimSpace(errBuf.String())
 		if errMsg == "" {
 			errMsg = execErr.Error()
@@ -1102,7 +1106,196 @@ func runCode(language, code, input string) (stdout string, runErr string) {
 	return strings.TrimSpace(outBuf.String()), ""
 }
 
-// runAgainstTestCases runs code against all test cases for a question and returns results.
+// runGoTest compiles and runs a Go test file against the user's submitted code.
+// It writes main.go (user code) + main_test.go (question's test file) into a
+// temp module, runs `go test -v ./...`, and parses the -v output into TestResults.
+func runGoTest(userCode, testFile string) RunResult {
+	if !acquireSemaphore() {
+		return RunResult{
+			Results: []TestResult{{Index: 1, Error: "server busy — too many concurrent executions, try again in a moment"}},
+		}
+	}
+	defer func() { <-execSemaphore }()
+
+	dir, err := os.MkdirTemp("", "gotest-*")
+	if err != nil {
+		return RunResult{Results: []TestResult{{Index: 1, Error: "failed to create temp dir"}}}
+	}
+	defer os.RemoveAll(dir)
+
+	// Write go.mod so `go test` works without a GOPATH module
+	goMod := "module submission\n\ngo 1.21\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(goMod), 0644); err != nil {
+		return RunResult{Results: []TestResult{{Index: 1, Error: "failed to write go.mod"}}}
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(userCode), 0644); err != nil {
+		return RunResult{Results: []TestResult{{Index: 1, Error: "failed to write main.go"}}}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main_test.go"), []byte(testFile), 0644); err != nil {
+		return RunResult{Results: []TestResult{{Index: 1, Error: "failed to write main_test.go"}}}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", "test", "-v", "./...")
+	cmd.Dir = dir
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	cmd.Run() // We intentionally ignore the top-level error; we parse output instead.
+
+	if ctx.Err() == context.DeadlineExceeded {
+		if cmd.Process != nil {
+			syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		return RunResult{Results: []TestResult{{Index: 1, Error: "time limit exceeded (30s)"}}}
+	}
+
+	// Combine stdout + stderr for parsing (go test -v writes test lines to stdout,
+	// but compilation errors go to stderr).
+	combined := outBuf.String()
+	if strings.TrimSpace(combined) == "" {
+		// Compilation failure — stderr has the details
+		errMsg := strings.TrimSpace(errBuf.String())
+		if errMsg == "" {
+			errMsg = "compilation failed (no output)"
+		}
+		return RunResult{Results: []TestResult{{Index: 1, Error: errMsg}}}
+	}
+
+	return parseGoTestOutput(combined)
+}
+
+// parseGoTestOutput converts `go test -v` stdout into a RunResult.
+//
+// Relevant lines from -v output:
+//
+//	=== RUN   TestFoo
+//	--- PASS: TestFoo (0.00s)
+//	--- FAIL: TestFoo (0.00s)
+//	    main_test.go:12: expected 30, got 0
+//
+// We collect each RUN block, then mark it PASS or FAIL from the matching --- line,
+// and accumulate any indented lines between them as the failure message.
+func parseGoTestOutput(output string) RunResult {
+	type block struct {
+		name    string
+		passed  bool
+		lines   []string // failure detail lines
+		decided bool     // have we seen the --- PASS/FAIL line?
+	}
+
+	var blocks []*block
+	byName := map[string]*block{}
+	var current *block
+
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		switch {
+		case strings.HasPrefix(line, "=== RUN"):
+			// "=== RUN   TestFoo" or "=== RUN   TestFoo/subtest"
+			parts := strings.Fields(line)
+			if len(parts) >= 3 {
+				name := parts[2]
+				b := &block{name: name}
+				blocks = append(blocks, b)
+				byName[name] = b
+				current = b
+			}
+
+		case strings.HasPrefix(line, "--- PASS:") || strings.HasPrefix(line, "--- FAIL:"):
+			// "--- PASS: TestFoo (0.00s)"
+			passed := strings.HasPrefix(line, "--- PASS:")
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				name := parts[2]
+				if b, ok := byName[name]; ok {
+					b.passed = passed
+					b.decided = true
+					current = nil
+				}
+			}
+
+		default:
+			// Indented failure detail line — belongs to the current block
+			if current != nil && !current.decided {
+				trimmed := strings.TrimSpace(line)
+				if trimmed != "" {
+					current.lines = append(current.lines, trimmed)
+				}
+			}
+		}
+	}
+
+	// Build results; skip sub-tests (names containing "/") to avoid duplication —
+	// the parent test's PASS/FAIL already covers them. Show them only if we have
+	// no top-level results at all.
+	var results []TestResult
+	index := 1
+	for _, b := range blocks {
+		if strings.Contains(b.name, "/") {
+			continue
+		}
+		tr := TestResult{
+			Index:  index,
+			Passed: b.passed,
+			// Use the test function name as the human-readable label via the Got field
+			// so the frontend can display it. Input/Expected stay empty for Go tests.
+			Got: b.name,
+		}
+		if !b.passed && len(b.lines) > 0 {
+			tr.Error = strings.Join(b.lines, "\n")
+		}
+		results = append(results, tr)
+		index++
+	}
+
+	// If all tests were sub-tests (or none had RUN lines), fall back to showing them.
+	if len(results) == 0 {
+		for _, b := range blocks {
+			tr := TestResult{
+				Index:  index,
+				Passed: b.passed,
+				Got:    b.name,
+			}
+			if !b.passed && len(b.lines) > 0 {
+				tr.Error = strings.Join(b.lines, "\n")
+			}
+			results = append(results, tr)
+			index++
+		}
+	}
+
+	// If we still have nothing (e.g. build failed but output wasn't empty), surface raw output.
+	if len(results) == 0 {
+		return RunResult{
+			Results: []TestResult{{Index: 1, Error: strings.TrimSpace(output)}},
+		}
+	}
+
+	passed := 0
+	for _, r := range results {
+		if r.Passed {
+			passed++
+		}
+	}
+	total := len(results)
+	return RunResult{
+		Passed:    passed,
+		Total:     total,
+		AllPassed: passed == total && total > 0,
+		Results:   results,
+	}
+}
+
+// runAgainstTestCases runs code against JSON-defined test cases (Python/JS/bash/legacy Go).
 func runAgainstTestCases(language, code string, testCases []TestCase) RunResult {
 	result := RunResult{Total: len(testCases)}
 	var mu sync.Mutex
@@ -1168,31 +1361,52 @@ func handleRunCode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "code required", 400)
 		return
 	}
+	if body.Language == "" {
+		body.Language = "go"
+	}
 
-	// Fetch test cases for this question
-	var testCasesJSON string
-	err := db.QueryRow(`SELECT COALESCE(test_cases,'[]') FROM questions WHERE id=$1`, body.QuestionID).Scan(&testCasesJSON)
+	// Fetch both test_file and test_cases for this question
+	var testCasesJSON, testFile string
+	err := db.QueryRow(
+		`SELECT COALESCE(test_cases,'[]'), COALESCE(test_file,'') FROM questions WHERE id=$1`,
+		body.QuestionID,
+	).Scan(&testCasesJSON, &testFile)
 	if err != nil {
 		http.Error(w, "question not found", 404)
 		return
 	}
 
-	var testCases []TestCase
-	if err := json.Unmarshal([]byte(testCasesJSON), &testCases); err != nil || len(testCases) == 0 {
-		// No test cases defined — run the code once with empty input and return output only
-		out, runErr := runCode(body.Language, body.Code, "")
-		result := RunResult{Total: 0, Passed: 0, AllPassed: false}
-		if runErr != "" {
-			result.Results = []TestResult{{Index: 1, Error: runErr, Passed: false}}
-		} else {
-			result.Results = []TestResult{{Index: 1, Got: out, Passed: false, Error: "no test cases defined for this question — output shown above"}}
-		}
+	// ── Routing logic ──────────────────────────────────────
+	// Priority 1: Go language + test_file present → use go test runner
+	if body.Language == "go" && strings.TrimSpace(testFile) != "" {
+		result := runGoTest(body.Code, testFile)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
 		return
 	}
 
-	result := runAgainstTestCases(body.Language, body.Code, testCases)
+	// Priority 2: JSON test cases present → use stdin/stdout runner (all languages)
+	var testCases []TestCase
+	if err := json.Unmarshal([]byte(testCasesJSON), &testCases); err == nil && len(testCases) > 0 {
+		result := runAgainstTestCases(body.Language, body.Code, testCases)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
+	// Priority 3: No test cases defined — run once with empty input, show raw output
+	out, runErr := runCode(body.Language, body.Code, "")
+	result := RunResult{Total: 0, Passed: 0, AllPassed: false}
+	if runErr != "" {
+		result.Results = []TestResult{{Index: 1, Error: runErr, Passed: false}}
+	} else {
+		result.Results = []TestResult{{
+			Index:  1,
+			Got:    out,
+			Passed: false,
+			Error:  "no test cases defined for this question — output shown above",
+		}}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
 }
@@ -1261,7 +1475,7 @@ func main() {
 	srv := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 45 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
 }

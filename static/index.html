@@ -171,7 +171,6 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 .sub-lang{font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.08);color:var(--accent);border:1px solid rgba(0,212,255,0.2)}
 .stars{color:var(--warn);font-size:12px;letter-spacing:1px}
 .sub-count{font-family:var(--font-mono);font-size:10px;color:var(--muted)}
-/* FIX: sub-body hidden by default, shown with .open */
 .sub-body{display:none;padding:0 16px 16px;border-top:1px solid var(--border)}
 .sub-body.open{display:block}
 .code-block{background:var(--surface);border-radius:8px;padding:14px;margin-top:12px;font-family:var(--font-mono);font-size:12px;overflow-x:auto;border:1px solid var(--border);white-space:pre}
@@ -263,7 +262,6 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 .test-case-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px}
 .test-case-badge.pass{background:rgba(0,255,157,0.1);color:var(--accent2)}
 .test-case-badge.fail{background:rgba(255,77,109,0.1);color:var(--hard)}
-/* FIX: test-case-body hidden by default; .open makes it grid */
 .test-case-body{display:none;padding:10px 12px;border-top:1px solid var(--border);grid-template-columns:1fr 1fr;gap:10px}
 .test-case-body.open{display:grid}
 .test-field-label{font-family:var(--font-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
@@ -275,6 +273,8 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 .run-spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--bg);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;margin-right:6px;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
 .no-tests-note{font-family:var(--font-mono);font-size:11px;color:var(--muted);font-style:italic;margin-top:8px}
+/* Go test file badge */
+.go-test-badge{font-family:var(--font-mono);font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(0,212,255,0.08);color:var(--accent);border:1px solid rgba(0,212,255,0.2)}
 </style>
 </head>
 <body>
@@ -440,8 +440,12 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
             <div><label class="form-label">Hint Text</label><input class="form-input" id="aq-htxt" placeholder="Go docs"/></div>
           </div>
           <div>
-            <label class="form-label">Test Cases (JSON) <span style="color:var(--muted);font-size:9px;text-transform:none;letter-spacing:0">— optional, format: [{"input":"hello\n","expected":"HELLO"}]</span></label>
+            <label class="form-label">Test Cases (JSON) <span style="color:var(--muted);font-size:9px;text-transform:none;letter-spacing:0">— for Python/JS/Bash: [{"input":"hello\n","expected":"HELLO"}]</span></label>
             <textarea class="form-input" id="aq-tests" rows="3" placeholder='[{"input":"hello\n","expected":"HELLO"},{"input":"world\n","expected":"WORLD"}]'></textarea>
+          </div>
+          <div>
+            <label class="form-label">Go Test File <span style="color:var(--muted);font-size:9px;text-transform:none;letter-spacing:0">— optional, Go only: paste _test.go source. Overrides test cases for Go submissions.</span></label>
+            <textarea class="form-input" id="aq-testfile" rows="6" placeholder="package main&#10;&#10;import &quot;testing&quot;&#10;&#10;func TestExample(t *testing.T) {&#10;    // ...&#10;}"></textarea>
           </div>
           <button class="btn-send" onclick="adminAddQuestion()">+ Add Question</button>
         </div>
@@ -470,7 +474,6 @@ var timerInterval = null;
 
 // Per-question timers: { questionId: remainingSeconds }
 var questionTimers = {};
-// Single shared interval that ticks all question timers (pauses with session timer)
 var questionTickInterval = null;
 
 // ── INIT ─────────────────────────────────────────────────
@@ -555,7 +558,6 @@ async function enterApp() {
   document.getElementById('auth-page').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
 
-  // Refresh user info from server
   try {
     var meRes = await apiFetch('/api/me');
     if (meRes.ok) {
@@ -618,7 +620,6 @@ function resetTimer() {
   stopTimer();
   timerSeconds = 5 * 60 * 60;
   updateTimerDisplay();
-  // Reset question timers back to full allocations
   reassignQuestionTimers();
 }
 
@@ -642,22 +643,15 @@ function updateTimerDisplay() {
 }
 
 // ── QUESTION TIMERS ───────────────────────────────────────
-// All question timers share a single tick interval that starts/stops with the session timer.
-// This prevents drift and ensures pause/resume works correctly.
-
 function startQuestionTick() {
   if (questionTickInterval) return;
   questionTickInterval = setInterval(function() {
-    var anyVisible = false;
     Object.keys(questionTimers).forEach(function(qidStr) {
       var qid = parseInt(qidStr);
       if (questionTimers[qid] > 0) {
         questionTimers[qid]--;
-        anyVisible = true;
         updateQTimerDisplay(qid);
-        if (questionTimers[qid] === 0) {
-          expireQuestion(qid);
-        }
+        if (questionTimers[qid] === 0) expireQuestion(qid);
       }
     });
   }, 1000);
@@ -673,10 +667,7 @@ function expireQuestion(qid) {
   if (el) {
     el.style.transition = 'opacity 0.8s';
     el.style.opacity = '0';
-    setTimeout(function() {
-      el.remove();
-      updateProgress();
-    }, 800);
+    setTimeout(function() { el.remove(); updateProgress(); }, 800);
   }
   if (currentQuestion && currentQuestion.id === qid) {
     document.getElementById('detail-pane').innerHTML =
@@ -703,8 +694,6 @@ function qTimerStr(qid) {
   return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + ' left';
 }
 
-// Assign question timer durations proportionally across 5 hours.
-// Called once on first load. Preserves existing timers for already-assigned questions.
 function assignQuestionTimers() {
   var visible = questions.filter(function(q) { return q.visible; });
   var easyTime = 12 * 60, medTime = 18 * 60, hardTime = 25 * 60;
@@ -713,19 +702,15 @@ function assignQuestionTimers() {
     total += q.difficulty === 'easy' ? easyTime : q.difficulty === 'medium' ? medTime : hardTime;
   });
   var scale = total > 0 ? (5 * 3600) / total : 1;
-
   visible.forEach(function(q) {
-    // Only assign if not yet assigned (preserve countdown already in progress)
     if (questionTimers[q.id] === undefined) {
       var base = q.difficulty === 'easy' ? easyTime : q.difficulty === 'medium' ? medTime : hardTime;
       questionTimers[q.id] = Math.round(base * scale);
     }
   });
-
   if (timerRunning) startQuestionTick();
 }
 
-// Full reassign — used only on timer reset
 function reassignQuestionTimers() {
   stopQuestionTick();
   questionTimers = {};
@@ -749,11 +734,9 @@ async function loadQuestions() {
   var res = await apiFetch('/api/questions');
   if (!res.ok) return;
   questions = await res.json();
-  // Load completed IDs from localStorage
   var saved = [];
   try { saved = JSON.parse(localStorage.getItem('completed_' + currentUser.id) || '[]'); } catch(e) {}
   completedIds = new Set(saved);
-  // Assign timers for questions not yet tracked
   assignQuestionTimers();
   renderQuestionList();
   updateProgress();
@@ -800,6 +783,23 @@ function updateProgress() {
   document.getElementById('header-answered').textContent = done + ' solved';
 }
 
+// ── testInfoHtml: tri-state badge for the run bar ─────────
+// Returns HTML string: "Go test file" | "N test case(s)" | "no test cases — run shows raw output"
+function testInfoHtml(q) {
+  if (q.test_file && q.test_file.trim() !== '') {
+    return '<span class="go-test-badge">&#x1F9EA; Go test file</span>';
+  }
+  var testCaseCount = 0;
+  try {
+    var tc = JSON.parse(q.test_cases || '[]');
+    testCaseCount = Array.isArray(tc) ? tc.length : 0;
+  } catch(e) {}
+  if (testCaseCount > 0) {
+    return '<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">' + testCaseCount + ' test case(s) available</span>';
+  }
+  return '<span class="no-tests-note" style="margin-top:0">no test cases \u2014 run shows raw output</span>';
+}
+
 async function selectQuestion(id) {
   currentQuestion = questions.find(function(q) { return q.id === id; });
   if (!currentQuestion) return;
@@ -808,13 +808,6 @@ async function selectQuestion(id) {
   var q = currentQuestion;
   var isComplete = completedIds.has(id);
   var isAdmin = currentUser.is_admin;
-
-  // Parse test cases safely
-  var testCaseCount = 0;
-  try {
-    var tc = JSON.parse(q.test_cases || '[]');
-    testCaseCount = Array.isArray(tc) ? tc.length : 0;
-  } catch(e) { testCaseCount = 0; }
 
   var pane = document.getElementById('detail-pane');
   pane.innerHTML =
@@ -880,9 +873,7 @@ async function selectQuestion(id) {
         '<div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
           '<button class="btn-run" id="run-btn" onclick="runTests(' + id + ')">&#x25BA; Run Tests</button>' +
           '<button class="btn-send" id="submit-btn" onclick="submitSolution(' + id + ')">Submit Solution &#x2192;</button>' +
-          (testCaseCount > 0
-            ? '<span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">' + testCaseCount + ' test case(s) available</span>'
-            : '<span class="no-tests-note">no test cases &#x2014; run shows raw output</span>') +
+          testInfoHtml(q) +
         '</div>' +
         '<div id="test-results-container"></div>' +
       '</div>' +
@@ -969,12 +960,8 @@ function toggleSub(id) {
   var body = document.getElementById('sub-body-' + id);
   if (!body) return;
   var isOpen = body.classList.contains('open');
-  // Close all open sub-bodies first
   document.querySelectorAll('.sub-body.open').forEach(function(b) { b.classList.remove('open'); });
-  if (!isOpen) {
-    body.classList.add('open');
-    loadReviews(id);
-  }
+  if (!isOpen) { body.classList.add('open'); loadReviews(id); }
 }
 
 function setStar(subId, val) {
@@ -999,7 +986,6 @@ async function submitReview(subId) {
   });
   if (!res.ok) { showToast(await res.text(), 'error'); return; }
   showToast('Review submitted!', 'success');
-  // Reset stars
   delete starValues[subId];
   if (commentEl) commentEl.value = '';
   var starsEl = document.getElementById('stars-' + subId);
@@ -1064,12 +1050,12 @@ async function runTests(qid) {
 }
 
 function renderTestResults(result, container) {
-  // No test cases — show raw output
   if (!result.results || result.results.length === 0) {
     container.innerHTML = '<div class="no-tests-note" style="margin-top:12px">No output returned.</div>';
     return;
   }
 
+  // Raw output path (no test cases defined)
   if (result.total === 0) {
     var r = result.results[0];
     var isErr = r.error && r.error !== 'no test cases defined for this question \u2014 output shown above';
@@ -1093,6 +1079,13 @@ function renderTestResults(result, container) {
     return;
   }
 
+  // Determine if this is a Go test file run:
+  // Got = test function name, input/expected are empty.
+  var isGoTestRun = result.results.length > 0 &&
+    !result.results[0].input &&
+    !result.results[0].expected &&
+    result.results[0].got; // test function name
+
   var summaryClass, summaryText;
   if (result.all_passed) {
     summaryClass = 'all-pass';
@@ -1108,8 +1101,23 @@ function renderTestResults(result, container) {
   var casesHtml = result.results.map(function(r) {
     var cls = r.passed ? 'pass' : 'fail';
     var badgeText = r.passed ? '\u2713 Pass' : '\u2717 Fail';
+    // Label: for Go test run, use the function name (r.got); otherwise "Test N"
+    var label = isGoTestRun ? escHtml(r.got || ('Test ' + r.index)) : ('Test ' + r.index);
     var bodyContent;
-    if (r.error) {
+
+    if (isGoTestRun) {
+      // Go test path: show function name + failure detail (r.error)
+      if (r.passed) {
+        bodyContent = '<div style="grid-column:1/-1"><div class="test-field-label">Function</div>' +
+          '<div class="test-field-val">' + escHtml(r.got) + '</div></div>';
+      } else {
+        bodyContent =
+          '<div><div class="test-field-label">Function</div>' +
+          '<div class="test-field-val">' + escHtml(r.got) + '</div></div>' +
+          '<div><div class="test-field-label">Failure Detail</div>' +
+          '<div class="test-field-val error">' + escHtml(r.error || '(no detail)') + '</div></div>';
+      }
+    } else if (r.error) {
       bodyContent =
         '<div><div class="test-field-label">Error</div><div class="test-field-val error">' + escHtml(r.error) + '</div></div>' +
         '<div><div class="test-field-label">Input</div><div class="test-field-val">' + escHtml(r.input || '(none)') + '</div></div>';
@@ -1119,9 +1127,10 @@ function renderTestResults(result, container) {
         '<div><div class="test-field-label">Expected</div><div class="test-field-val">' + escHtml(r.expected) + '</div></div>' +
         (!r.passed ? '<div style="grid-column:1/-1"><div class="test-field-label">Got</div><div class="test-field-val error">' + escHtml(r.got || '(no output)') + '</div></div>' : '');
     }
+
     return '<div class="test-case ' + cls + '">' +
       '<div class="test-case-header" onclick="toggleTestCase(this)">' +
-        '<span class="test-case-label">Test ' + r.index + '</span>' +
+        '<span class="test-case-label">' + label + '</span>' +
         '<span class="test-case-badge ' + cls + '">' + badgeText + '</span>' +
       '</div>' +
       '<div class="test-case-body' + (!r.passed ? ' open' : '') + '">' + bodyContent + '</div>' +
@@ -1340,10 +1349,14 @@ async function loadAdminPanel() {
     }).join('');
 
     document.getElementById('admin-q-list').innerHTML = qs.map(function(q) {
+      var testLabel = q.test_file && q.test_file.trim() !== '' ? 'Go test' :
+        (function() {
+          try { var tc = JSON.parse(q.test_cases || '[]'); return Array.isArray(tc) && tc.length ? tc.length + ' case(s)' : 'no tests'; } catch(e) { return 'no tests'; }
+        })();
       return '<div class="admin-item">' +
         '<div class="admin-item-info">' +
           '<div class="admin-item-name">' + escHtml(q.title) + '</div>' +
-          '<div class="admin-item-sub">' + q.difficulty + ' \u00B7 ' + escHtml(q.category) + '</div>' +
+          '<div class="admin-item-sub">' + q.difficulty + ' \u00B7 ' + escHtml(q.category) + ' \u00B7 ' + testLabel + '</div>' +
         '</div>' +
         '<div class="admin-item-actions">' +
           '<button class="btn-sm ' + (q.visible ? 'btn-sm-success' : 'btn-sm-muted') + '" onclick="adminToggleVisibilityFromPanel(' + q.id + ',' + !q.visible + ',this)">' +
@@ -1393,7 +1406,6 @@ async function adminToggleVisibility(qid) {
     });
     if (res.ok) {
       q.visible = newVis;
-      // Assign timer for newly visible question (won't overwrite existing)
       if (newVis) assignQuestionTimers();
       showToast(newVis ? 'Question is now visible' : 'Question hidden', 'success');
       var btn = document.getElementById('vis-btn');
@@ -1415,10 +1427,7 @@ async function adminToggleVisibilityFromPanel(qid, newVis, btn) {
     });
     if (res.ok) {
       var q = questions.find(function(x) { return x.id === qid; });
-      if (q) {
-        q.visible = newVis;
-        if (newVis) assignQuestionTimers();
-      }
+      if (q) { q.visible = newVis; if (newVis) assignQuestionTimers(); }
       btn.innerHTML = newVis ? '&#x1F441; Visible' : '&#x1F441; Hidden';
       btn.className = 'btn-sm ' + (newVis ? 'btn-sm-success' : 'btn-sm-muted');
       showToast(newVis ? 'Question visible' : 'Question hidden', 'success');
@@ -1437,7 +1446,6 @@ async function adminDeleteQuestion(qid) {
     });
     if (res.ok) {
       questions = questions.filter(function(q) { return q.id !== qid; });
-      // Clean up timer for deleted question
       delete questionTimers[qid];
       showToast('Question deleted', 'success');
       if (currentQuestion && currentQuestion.id === qid) {
@@ -1447,7 +1455,6 @@ async function adminDeleteQuestion(qid) {
       }
       renderQuestionList();
       updateProgress();
-      // Refresh admin panel if it's the active tab
       var adminTab = document.getElementById('tab-admin');
       if (adminTab && adminTab.style.display !== 'none') loadAdminPanel();
     } else { showToast(await res.text(), 'error'); }
@@ -1462,32 +1469,40 @@ async function adminAddQuestion() {
   var hint_url = document.getElementById('aq-hurl').value.trim() || 'https://pkg.go.dev';
   var hint_text = document.getElementById('aq-htxt').value.trim() || 'Go documentation';
   var testCasesRaw = document.getElementById('aq-tests').value.trim() || '[]';
+  var testFile = document.getElementById('aq-testfile').value.trim();
 
   if (!title || !description) { showToast('Title and description required', 'error'); return; }
 
-  try {
-    var parsed = JSON.parse(testCasesRaw);
-    if (!Array.isArray(parsed)) throw new Error('not an array');
-  } catch(e) {
-    showToast('Test cases must be a valid JSON array, e.g. [{"input":"hi","expected":"HI"}]', 'error');
-    return;
+  // Validate test_cases JSON only if provided
+  if (testCasesRaw !== '[]') {
+    try {
+      var parsed = JSON.parse(testCasesRaw);
+      if (!Array.isArray(parsed)) throw new Error('not an array');
+    } catch(e) {
+      showToast('Test cases must be a valid JSON array, e.g. [{"input":"hi","expected":"HI"}]', 'error');
+      return;
+    }
   }
+
+  var body = {
+    title: title, description: description, difficulty: difficulty,
+    category: category, hint_url: hint_url, hint_text: hint_text,
+    test_cases: testCasesRaw
+  };
+  // Only send test_file if non-empty
+  if (testFile) body.test_file = testFile;
 
   try {
     var res = await apiFetch('/api/questions', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        title: title, description: description, difficulty: difficulty,
-        category: category, hint_url: hint_url, hint_text: hint_text,
-        test_cases: testCasesRaw
-      })
+      body: JSON.stringify(body)
     });
     if (res.ok) {
       var q = await res.json();
       questions.push(q);
       showToast('Question added', 'success');
-      ['aq-title','aq-desc','aq-cat','aq-hurl','aq-htxt','aq-tests'].forEach(function(id) {
+      ['aq-title','aq-desc','aq-cat','aq-hurl','aq-htxt','aq-tests','aq-testfile'].forEach(function(id) {
         document.getElementById(id).value = '';
       });
       renderQuestionList();
