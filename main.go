@@ -1013,14 +1013,14 @@ func handleNotifications(w http.ResponseWriter, r *http.Request) {
 
 // execSemaphore limits concurrent code executions to protect Railway resources.
 // Max 3 simultaneous subprocesses — enough for a hackathon, safe on hobby plan.
-var execSemaphore = make(chan struct{}, 3)
+var execSemaphore = make(chan struct{}, 10)
 
 func runCode(language, code, input string) (stdout string, runErr string) {
 	// Acquire slot; if all 3 are busy, reject immediately (don't queue)
 	select {
 	case execSemaphore <- struct{}{}:
 		defer func() { <-execSemaphore }()
-	default:
+	case <-time.After(5 * time.Second):
 		return "", "server busy — too many concurrent executions, try again in a moment"
 	}
 
@@ -1112,6 +1112,7 @@ func runAgainstTestCases(language, code string, testCases []TestCase) RunResult 
 
 	for i, tc := range testCases {
 		wg.Add(1)
+		time.Sleep(time.Duration(i) * 50 * time.Millisecond)
 		go func(idx int, tc TestCase) {
 			defer wg.Done()
 			got, runErr := runCode(language, code, tc.Input)
