@@ -2,16 +2,23 @@
 var _cmEditor = null;
 
 function initCodeEditor() {
-  // Destroy previous instance if navigating between questions
-  if (_cmEditor) {
-    _cmEditor.toTextArea();
-    _cmEditor = null;
-  }
+  // Null out the reference first so getEditorCode() falls back cleanly
+  // while we wait for the setTimeout
+  _cmEditor = null;
+
+  // Wipe the container directly — avoids calling toTextArea() on a
+  // potentially stale instance which was causing the TypeError
+  var existing = document.getElementById('sub-code-editor');
+  if (existing) existing.innerHTML = '';
 
   // Defer mount to next paint so the freshly injected DOM has dimensions
   setTimeout(function() {
     var target = document.getElementById('sub-code-editor');
     if (!target || !window.CodeMirror) return;
+
+    // Guard: if another question was clicked before this timeout fired,
+    // the target div will have been wiped again — bail out safely
+    if (target.closest('#detail-pane') === null) return;
 
     _cmEditor = CodeMirror(target, {
       value: '',
@@ -41,10 +48,12 @@ function initCodeEditor() {
 
     _cmEditor.setSize('100%', '340px');
 
+    // Force a refresh so CodeMirror redraws correctly in the new container
+    _cmEditor.refresh();
+
     // Sync language dropdown to editor highlight mode
     var langEl = document.getElementById('sub-lang');
     if (langEl) {
-      // Set initial mode from whatever language is currently selected
       _cmEditor.setOption('mode', langToMode(langEl.value));
 
       langEl.addEventListener('change', function() {
