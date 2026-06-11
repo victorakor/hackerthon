@@ -271,3 +271,9 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 .toast.success{background:#0d2a1a;border:1px solid var(--accent2);color:var(--accent2)}
 .toast.error{background:#2a0d0d;border:1px solid var(--hard);color:var(--hard)}
 @keyframes toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+/* dim submit button at the begining*/
+.btn-send:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+  pointer-events: none;
+}

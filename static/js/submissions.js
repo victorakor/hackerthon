@@ -53,6 +53,9 @@ function toggleSub(id) {
 }
 
 async function submitSolution(qid) {
+  var submitBtn = document.getElementById('submit-btn');
+  if (!submitBtn || submitBtn.disabled) { showToast('Run tests first and pass them all', 'error'); return; }
+
   var codeEl = document.getElementById('sub-code');
   var langEl = document.getElementById('sub-lang');
   var notesEl = document.getElementById('sub-notes');
@@ -61,8 +64,9 @@ async function submitSolution(qid) {
   var notes = notesEl ? notesEl.value.trim() : '';
   if (!code) { showToast('Code is required', 'error'); return; }
 
-  var submitBtn = document.getElementById('submit-btn');
-  if (submitBtn) submitBtn.disabled = true;
+  submitBtn.disabled = true;
+  submitBtn.style.opacity = '.4';
+  submitBtn.style.cursor = 'not-allowed';
 
   try {
     var res = await apiFetch('/api/submissions', {
@@ -82,6 +86,9 @@ async function submitSolution(qid) {
     if (notesEl) notesEl.value = '';
     loadSubmissions(qid);
   } finally {
-    if (submitBtn) submitBtn.disabled = false;
+    // keep locked after submit — user must re-run tests for a new submission
+    submitBtn.disabled = true;
+    submitBtn.style.opacity = '.4';
+    submitBtn.style.cursor = 'not-allowed';
   }
 }
