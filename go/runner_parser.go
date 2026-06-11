@@ -5,7 +5,28 @@ import (
 	"strings"
 )
 
-func ParseGoTestOutput(output string) RunResult {
+// ParseGoTestOutput parses `go test -v` stdout into structured TestResults.
+// stderrOutput should be the stderr from the same test run; it is used to
+// surface compiler diagnostics when the build fails before any test runs.
+func ParseGoTestOutput(output, stderrOutput string) RunResult {
+	// Detect a build failure: Go emits "FAIL <pkg> [build failed]" with no
+	// "=== RUN" lines.  The actual compiler errors live in stderr, not stdout.
+	isBuildFailure := strings.Contains(output, "[build failed]") ||
+		strings.Contains(output, "build failed")
+
+	if isBuildFailure {
+		errMsg := cleanCompilerError(stderrOutput)
+		if errMsg == "" {
+			errMsg = strings.TrimSpace(output)
+		}
+		return RunResult{
+			Results: []TestResult{{
+				Index: 1,
+				Error: "Build failed — fix the compile errors below:\n\n" + errMsg,
+			}},
+		}
+	}
+
 	type block struct {
 		name    string
 		passed  bool
@@ -106,4 +127,28 @@ func ParseGoTestOutput(output string) RunResult {
 		AllPassed: passed == total && total > 0,
 		Results:   results,
 	}
+}
+
+// cleanCompilerError strips the go tool noise from compiler output and returns
+// just the lines that actually help the user understand what went wrong.
+// It removes lines like "# submission", blank lines at top, and the final
+// "FAIL submission [build failed]" summary line.
+func cleanCompilerError(stderr string) string {
+	if stderr == "" {
+		return ""
+	}
+	var kept []string
+	for _, line := range strings.Split(stderr, "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Skip package header lines like "# submission"
+		if strings.HasPrefix(trimmed, "# ") {
+			continue
+		}
+		// Skip the trailing FAIL summary
+		if strings.HasPrefix(trimmed, "FAIL") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.TrimSpace(strings.Join(kept, "\n"))
 }

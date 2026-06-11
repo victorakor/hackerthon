@@ -69,6 +69,35 @@ function renderTestResults(result, container) {
     return;
   }
 
+  // Build failure: single result with no .got and error starting with "Build failed"
+  var isBuildFailure = result.results.length === 1 &&
+    !result.results[0].got &&
+    result.results[0].error &&
+    result.results[0].error.indexOf('Build failed') === 0;
+
+  if (isBuildFailure) {
+    var errText = result.results[0].error;
+    var sepIdx = errText.indexOf('\n\n');
+    var header = sepIdx >= 0 ? errText.slice(0, sepIdx) : errText;
+    var detail = sepIdx >= 0 ? errText.slice(sepIdx + 2) : '';
+    container.innerHTML =
+      '<div class="test-results">' +
+        '<div class="test-results-header">' +
+          '<span class="test-results-summary all-fail">\u2717 Build Failed</span>' +
+        '</div>' +
+        '<div class="test-case fail">' +
+          '<div class="test-case-body open" style="grid-template-columns:1fr">' +
+            '<div>' +
+              '<div class="test-field-label">' + escHtml(header) + '</div>' +
+              (detail ? '<pre class="test-field-val error" style="white-space:pre-wrap;word-break:break-all;margin:0">' + escHtml(detail) + '</pre>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    lockSubmit();
+    return;
+  }
+
   var isGoTestRun = result.results.length > 0 &&
     !result.results[0].input &&
     !result.results[0].expected &&

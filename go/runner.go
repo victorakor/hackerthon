@@ -150,15 +150,16 @@ func RunTest(userCode, testFile string) RunResult {
 	}
 
 	combined := outBuf.String()
+	stderrOut := strings.TrimSpace(errBuf.String())
+
 	if strings.TrimSpace(combined) == "" {
-		errMsg := strings.TrimSpace(errBuf.String())
-		if errMsg == "" {
-			errMsg = "compilation failed (no output)"
+		if stderrOut == "" {
+			stderrOut = "compilation failed (no output)"
 		}
-		return RunResult{Results: []TestResult{{Index: 1, Error: errMsg}}}
+		return RunResult{Results: []TestResult{{Index: 1, Error: stderrOut}}}
 	}
 
-	return ParseGoTestOutput(combined)
+	return ParseGoTestOutput(combined, stderrOut)
 }
 
 func RunAgainstTestCases(language, code string, testCases []TestCase) RunResult {
