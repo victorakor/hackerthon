@@ -138,7 +138,7 @@ async function selectQuestion(id) {
         '<div><label class="form-label">Code</label><textarea class="form-input" id="sub-code" placeholder="Paste your solution here\u2026"></textarea></div>' +
         '<div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
           '<button class="btn-run" id="run-btn" onclick="runTests(' + id + ')">&#x25BA; Run Tests</button>' +
-          '<button class="btn-send" id="submit-btn" onclick="submitSolution(' + id + ')" disabled style="opacity:.4;cursor:not-allowed">Submit Solution &#x2192;</button>' +          
+          '<button class="btn-send" id="submit-btn" onclick="submitSolution(' + id + ')" disabled style="opacity:.4;cursor:not-allowed">Submit Solution &#x2192;</button>' +
           testInfoHtml(q) +
         '</div>' +
         '<div id="test-results-container"></div>' +

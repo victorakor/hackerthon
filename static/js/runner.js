@@ -33,9 +33,16 @@ async function runTests(qid) {
 function renderTestResults(result, container) {
   var submitBtn = document.getElementById('submit-btn');
 
+  function lockSubmit() {
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = '.4'; submitBtn.style.cursor = 'not-allowed'; }
+  }
+  function unlockSubmit() {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = ''; submitBtn.style.cursor = ''; }
+  }
+
   if (!result.results || result.results.length === 0) {
     container.innerHTML = '<div class="no-tests-note" style="margin-top:12px">No output returned.</div>';
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = '.4'; submitBtn.style.cursor = 'not-allowed'; }
+    lockSubmit();
     return;
   }
 
@@ -59,11 +66,7 @@ function renderTestResults(result, container) {
         '</div>' +
         '<div class="no-tests-note">No test cases defined \u2014 add them in the admin panel to enable pass/fail checking.</div>' +
       '</div>';
-    // no test cases — allow submission if code ran without error
-    if (submitBtn) {
-      if (!isErr) { submitBtn.disabled = false; submitBtn.style.opacity = ''; submitBtn.style.cursor = ''; }
-      else { submitBtn.disabled = true; submitBtn.style.opacity = '.4'; submitBtn.style.cursor = 'not-allowed'; }
-    }
+    isErr ? lockSubmit() : unlockSubmit();
     return;
   }
 
@@ -128,6 +131,8 @@ function renderTestResults(result, container) {
       '</div>' +
       casesHtml +
     '</div>';
+
+  result.all_passed ? unlockSubmit() : lockSubmit();
 }
 
 function toggleTestCase(header) {
