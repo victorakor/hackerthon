@@ -135,7 +135,10 @@ async function selectQuestion(id) {
             '<input class="form-input" id="sub-notes" placeholder="Approach, time complexity\u2026"/>' +
           '</div>' +
         '</div>' +
-        '<div><label class="form-label">Code</label><textarea class="form-input" id="sub-code" placeholder="Paste your solution here\u2026"></textarea></div>' +
+        '<div>' +
+          '<label class="form-label">Code</label>' +
+          '<div id="sub-code-editor"></div>' +
+        '</div>' +
         '<div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
           '<button class="btn-run" id="run-btn" onclick="runTests(' + id + ')">&#x25BA; Run Tests</button>' +
           '<button class="btn-send" id="submit-btn" onclick="submitSolution(' + id + ')" disabled style="opacity:.4;cursor:not-allowed">Submit Solution &#x2192;</button>' +
@@ -151,6 +154,9 @@ async function selectQuestion(id) {
         '<div style="font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:20px">Loading\u2026</div>' +
       '</div>' +
     '</div>';
+
+  // Boot the CodeMirror editor now that the DOM is ready
+  initCodeEditor();
 
   loadSubmissions(id);
 }

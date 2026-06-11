@@ -1,7 +1,6 @@
 async function runTests(qid) {
-  var codeEl = document.getElementById('sub-code');
   var langEl = document.getElementById('sub-lang');
-  var code = codeEl ? codeEl.value.trim() : '';
+  var code = getEditorCode().trim();
   var language = langEl ? langEl.value : 'go';
   if (!code) { showToast('Paste your code first', 'error'); return; }
 

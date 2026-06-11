@@ -56,10 +56,9 @@ async function submitSolution(qid) {
   var submitBtn = document.getElementById('submit-btn');
   if (!submitBtn || submitBtn.disabled) { showToast('Run tests first and pass them all', 'error'); return; }
 
-  var codeEl = document.getElementById('sub-code');
   var langEl = document.getElementById('sub-lang');
   var notesEl = document.getElementById('sub-notes');
-  var code = codeEl ? codeEl.value.trim() : '';
+  var code = getEditorCode().trim();
   var language = langEl ? langEl.value : 'go';
   var notes = notesEl ? notesEl.value.trim() : '';
   if (!code) { showToast('Code is required', 'error'); return; }
@@ -82,11 +81,12 @@ async function submitSolution(qid) {
     renderQuestionList();
     var btn = document.getElementById('complete-btn');
     if (btn) { btn.innerHTML = '&#x2713; Completed'; btn.classList.add('done'); }
-    if (codeEl) codeEl.value = '';
+    // Clear the editor after successful submit
+    if (_cmEditor) { _cmEditor.setValue(''); } 
     if (notesEl) notesEl.value = '';
     loadSubmissions(qid);
   } finally {
-    // keep locked after submit — user must re-run tests for a new submission
+    // Keep locked after submit — user must re-run tests for a new submission
     submitBtn.disabled = true;
     submitBtn.style.opacity = '.4';
     submitBtn.style.cursor = 'not-allowed';
