@@ -8,49 +8,52 @@ function initCodeEditor() {
     _cmEditor = null;
   }
 
-  var target = document.getElementById('sub-code-editor');
-  if (!target || !window.CodeMirror) return;
+  // Defer mount to next paint so the freshly injected DOM has dimensions
+  setTimeout(function() {
+    var target = document.getElementById('sub-code-editor');
+    if (!target || !window.CodeMirror) return;
 
-  _cmEditor = CodeMirror(target, {
-    value: '',
-    mode: 'text/x-go',
-    theme: 'dracula',
-    lineNumbers: true,
-    indentUnit: 4,
-    tabSize: 4,
-    indentWithTabs: true,
-    matchBrackets: true,
-    autoCloseBrackets: true,
-    lineWrapping: false,
-    autofocus: true,
-    extraKeys: {
-      Tab: function(cm) {
-        if (cm.somethingSelected()) {
-          cm.indentSelection('add');
-        } else {
-          cm.replaceSelection('    ', 'end');
+    _cmEditor = CodeMirror(target, {
+      value: '',
+      mode: 'text/x-go',
+      theme: 'dracula',
+      lineNumbers: true,
+      indentUnit: 4,
+      tabSize: 4,
+      indentWithTabs: true,
+      matchBrackets: true,
+      autoCloseBrackets: true,
+      lineWrapping: false,
+      autofocus: true,
+      extraKeys: {
+        Tab: function(cm) {
+          if (cm.somethingSelected()) {
+            cm.indentSelection('add');
+          } else {
+            cm.replaceSelection('    ', 'end');
+          }
+        },
+        'Shift-Tab': function(cm) {
+          cm.indentSelection('subtract');
         }
-      },
-      'Shift-Tab': function(cm) {
-        cm.indentSelection('subtract');
-      }
-    }
-  });
-
-  _cmEditor.setSize('100%', '340px');
-
-  // Sync language dropdown to editor highlight mode
-  var langEl = document.getElementById('sub-lang');
-  if (langEl) {
-    // Set initial mode from whatever language is currently selected
-    _cmEditor.setOption('mode', langToMode(langEl.value));
-
-    langEl.addEventListener('change', function() {
-      if (_cmEditor) {
-        _cmEditor.setOption('mode', langToMode(langEl.value));
       }
     });
-  }
+
+    _cmEditor.setSize('100%', '340px');
+
+    // Sync language dropdown to editor highlight mode
+    var langEl = document.getElementById('sub-lang');
+    if (langEl) {
+      // Set initial mode from whatever language is currently selected
+      _cmEditor.setOption('mode', langToMode(langEl.value));
+
+      langEl.addEventListener('change', function() {
+        if (_cmEditor) {
+          _cmEditor.setOption('mode', langToMode(langEl.value));
+        }
+      });
+    }
+  }, 0);
 }
 
 function langToMode(lang) {
