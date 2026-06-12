@@ -4,8 +4,86 @@
 
 var _activeTournamentID = null;
 
+// Badge helpers for the Tournaments tab
+function showTournamentBadge() {
+  var b = document.getElementById('tournament-badge');
+  if (b) b.style.display = 'inline-block';
+}
+function hideTournamentBadge() {
+  var b = document.getElementById('tournament-badge');
+  if (b) b.style.display = 'none';
+}
+
+// localStorage seen-state for tournaments
+function _tSeenKey() {
+  return 't_seen_' + (currentUser ? currentUser.id : 'anon');
+}
+function _getSeenTournaments() {
+  try { return JSON.parse(localStorage.getItem(_tSeenKey()) || '[]'); } catch(e) { return []; }
+}
+function _markTournamentsSeen(ids) {
+  var seen = _getSeenTournaments();
+  ids.forEach(function(id) { if (seen.indexOf(id) === -1) seen.push(id); });
+  localStorage.setItem(_tSeenKey(), JSON.stringify(seen));
+}
+
+// Called on enterApp — lights the badge if user has unseen tournaments they're joined in,
+// and silently resumes an active arena only if it was already open this session
+async function initTournamentBadge() {
+  try {
+    var res = await apiFetch('/api/tournaments');
+    if (!res.ok) return;
+    var tournaments = await res.json();
+    if (!tournaments.length) return;
+
+    // Only show badge for tournaments the user joined (or any new tournament for non-participants)
+    var joined = tournaments.filter(function(t) { return t.is_joined; });
+    var seen = _getSeenTournaments();
+
+    // Badge for participants: any joined tournament they haven't seen
+    var hasUnseen = joined.some(function(t) { return seen.indexOf(t.id) === -1; });
+
+    // Badge for non-participants: any brand-new (upcoming) tournament they haven't seen
+    if (!hasUnseen) {
+      var upcoming = tournaments.filter(function(t) { return t.status === 'upcoming' && seen.indexOf(t.id) === -1; });
+      hasUnseen = upcoming.length > 0;
+    }
+
+    if (hasUnseen) showTournamentBadge();
+
+    // Only auto-resume active arena if it was already open in this session
+    var active = joined.find(function(t) { return t.status === 'active'; });
+    if (!active) return;
+
+    var arenaKey = 't_arena_' + (currentUser ? currentUser.id : 'anon');
+    var arenaActive = sessionStorage.getItem(arenaKey);
+    if (!arenaActive) return;  // fresh login — don't auto-popup
+
+    var detail = await (await apiFetch('/api/tournaments/' + active.id)).json();
+    _activeTournamentID = active.id;
+    ContestTimer.resume('tournament', active.id, active.scheduled_at,
+      detail.question_ids || [],
+      {
+        onStart: function() {},
+        onEnd:   function() { onTournamentEnd({ tournament_id: active.id }); }
+      }
+    );
+    showTournamentArena(active.id, detail.question_ids || [], active.scheduled_at);
+  } catch(e) {}
+}
+
 async function initTournamentsTab() {
+  // Clear the alert badge — user has now opened the tab
+  hideTournamentBadge();
   await loadTournamentList();
+  // Mark all currently-visible tournaments as seen
+  try {
+    var res2 = await apiFetch('/api/tournaments');
+    if (res2.ok) {
+      var all = await res2.json();
+      _markTournamentsSeen(all.map(function(t) { return t.id; }));
+    }
+  } catch(e) {}
   await checkForActiveTournament();
 }
 
@@ -135,6 +213,10 @@ async function checkForActiveTournament() {
     });
     if (!active) return;
 
+    // Mark session so reload within the same session resumes the arena
+    var arenaKey = 't_arena_' + (currentUser ? currentUser.id : 'anon');
+    sessionStorage.setItem(arenaKey, '1');
+
     var detail = await (await apiFetch('/api/tournaments/' + active.id)).json();
     _activeTournamentID = active.id;
     ContestTimer.resume('tournament', active.id, active.scheduled_at,
@@ -226,14 +308,20 @@ function showLeaderboardModal(data) {
 // ── Notification handlers ─────────────────────────────────────────────────────
 
 onTournamentStart = function(p) {
+  var arenaKey = 't_arena_' + (currentUser ? currentUser.id : 'anon');
+  sessionStorage.setItem(arenaKey, '1');
   showToast('🚀 Tournament #' + p.tournament_id + ' has started! Get ready!');
   enterTournamentArena(p.tournament_id);
 };
 
 onTournamentEnd = function(p) {
   ContestTimer.clear();
+  var arenaKey = 't_arena_' + (currentUser ? currentUser.id : 'anon');
+  sessionStorage.removeItem(arenaKey);
   showToast('⏱️ Tournament over! Loading results…');
   if (typeof exitContestMode === 'function') exitContestMode();
+  // Show badge so user knows there's a new result to view
+  showTournamentBadge();
   setTimeout(function() {
     if (p.tournament_id) viewTournamentLeaderboard(p.tournament_id);
     loadTournamentList();

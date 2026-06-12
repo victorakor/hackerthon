@@ -2,10 +2,70 @@
 
 var _activeChallengeID = null;  // challenge we are currently competing in
 
+// localStorage key for challenges seen-state: "ch_seen_<userID>" → JSON array of seen challenge IDs
+function _chSeenKey() {
+  return 'ch_seen_' + (currentUser ? currentUser.id : 'anon');
+}
+function _getSeenChallenges() {
+  try { return JSON.parse(localStorage.getItem(_chSeenKey()) || '[]'); } catch(e) { return []; }
+}
+function _markChallengesSeen(ids) {
+  var seen = _getSeenChallenges();
+  ids.forEach(function(id) { if (seen.indexOf(id) === -1) seen.push(id); });
+  localStorage.setItem(_chSeenKey(), JSON.stringify(seen));
+}
+
+// Called on enterApp — silently checks if there are unseen challenges
+// (participant only) and lights the badge, then resumes an active arena if needed
+async function initChallengeBadge() {
+  try {
+    var res = await apiFetch('/api/challenges');
+    if (!res.ok) return;
+    var challenges = await res.json();
+    if (!challenges.length) return;
+
+    var seen = _getSeenChallenges();
+    var hasUnseen = challenges.some(function(c) {
+      return seen.indexOf(c.id) === -1;
+    });
+    if (hasUnseen) showNotifBadge();
+
+    // Resume active arena silently (only if mid-contest, no popup on simple reload)
+    var active = challenges.find(function(c) { return c.status === 'active'; });
+    if (!active) return;
+
+    // Only auto-enter if contest was already running in this session
+    var arenaKey = 'ch_arena_' + (currentUser ? currentUser.id : 'anon');
+    var arenaActive = sessionStorage.getItem(arenaKey);
+    if (!arenaActive) return;  // fresh load — don't auto-popup
+
+    var detail = await (await apiFetch('/api/challenges/' + active.id)).json();
+    _activeChallengeID = active.id;
+    ContestTimer.resume('challenge', active.id, active.scheduled_at,
+      detail.question_ids || [],
+      {
+        onStart: function() {},
+        onEnd:   function() { onContestEnd({ challenge_id: active.id }); }
+      }
+    );
+    showChallengeArena(active.id, detail.question_ids || [], active.scheduled_at);
+  } catch(e) {}
+}
+
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 async function initChallengesTab() {
+  // Clear the alert badge — user has now opened the tab
+  hideNotifBadge();
   await loadChallengeList();
+  // Mark all currently-visible challenges as seen
+  try {
+    var res2 = await apiFetch('/api/challenges');
+    if (res2.ok) {
+      var all = await res2.json();
+      _markChallengesSeen(all.map(function(c) { return c.id; }));
+    }
+  } catch(e) {}
   await checkForActiveChallenge();
 }
 
@@ -196,6 +256,10 @@ async function checkForActiveChallenge() {
     var active = challenges.find(function(c) { return c.status === 'active'; });
     if (!active) return;
 
+    // Mark session so that next reload resumes the arena automatically
+    var arenaKey = 'ch_arena_' + (currentUser ? currentUser.id : 'anon');
+    sessionStorage.setItem(arenaKey, '1');
+
     // Resume the timer — contest is already running
     var detail = await (await apiFetch('/api/challenges/' + active.id)).json();
     _activeChallengeID = active.id;
@@ -315,12 +379,17 @@ onChallengeNeedsQuestions = function(p) {
 
 onContestStart = function(p) {
   if (!p.challenge_id) return;
+  var arenaKey = 'ch_arena_' + (currentUser ? currentUser.id : 'anon');
+  sessionStorage.setItem(arenaKey, '1');
   showToast('🚀 Challenge #' + p.challenge_id + ' has started!');
   enterChallengeArena(p.challenge_id);
 };
 
 onContestEnd = function(p) {
   ContestTimer.clear();
+  // Clear the session flag so a fresh login won't auto-enter a finished arena
+  var arenaKey = 'ch_arena_' + (currentUser ? currentUser.id : 'anon');
+  sessionStorage.removeItem(arenaKey);
   showToast('⏱️ Challenge over! Fetching results…');
   if (typeof exitContestMode === 'function') exitContestMode();
   setTimeout(function() {

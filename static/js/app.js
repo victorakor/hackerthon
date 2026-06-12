@@ -33,7 +33,7 @@ async function enterApp() {
   checkNotifications();
   startTimer();
   startNotificationPolling();
-  // Resume any active contest if page was refreshed mid-contest
-  checkForActiveChallenge();
-  checkForActiveTournament();
+  // Restore alert badges (without popping up any arenas)
+  initChallengeBadge();
+  initTournamentBadge();
 }

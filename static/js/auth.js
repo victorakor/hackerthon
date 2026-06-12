@@ -54,6 +54,11 @@ async function doRegister() {
 
 async function doLogout() {
   try { await apiFetch('/api/auth/logout', {method: 'POST'}); } catch(e) {}
+  // Clear contest session flags so next login doesn't auto-pop any arenas
+  if (currentUser) {
+    sessionStorage.removeItem('ch_arena_' + currentUser.id);
+    sessionStorage.removeItem('t_arena_' + currentUser.id);
+  }
   authToken = null;
   currentUser = null;
   localStorage.removeItem('authToken');
