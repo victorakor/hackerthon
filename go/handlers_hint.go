@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -14,9 +13,7 @@ import (
 
 // ─── In-memory hint counter ───────────────────────────────────────────────────
 // Key: "userID:questionID"  Value: number of hints used this session
-// This lives in process memory, so it resets automatically on server restart
-// or when the user's session token is deleted (logout).
-// We protect it with a mutex because HTTP handlers run concurrently.
+// Lives in process memory — resets on server restart or explicit logout.
 
 var (
 	hintMu      sync.Mutex
@@ -29,8 +26,7 @@ func hintKey(userID, questionID int) string {
 	return fmt.Sprintf("%d:%d", userID, questionID)
 }
 
-// ResetHintCountsForUser is called from HandleLogout so counts are cleared
-// the moment the user logs out (not just on server restart).
+// ResetHintCountsForUser is called from HandleLogout.
 func ResetHintCountsForUser(userID int) {
 	prefix := fmt.Sprintf("%d:", userID)
 	hintMu.Lock()
@@ -92,8 +88,8 @@ func HandleHint(w http.ResponseWriter, r *http.Request) {
 	remaining := maxHintsPerQuestion - (used + 1)
 	hintMu.Unlock()
 
-	// ── Build Anthropic request ──────────────────────────────────────────────
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	// ── Build HuggingFace request ────────────────────────────────────────────
+	apiKey := os.Getenv("HF_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "AI hints are not configured on this server", 503)
 		return
@@ -104,7 +100,7 @@ func HandleHint(w http.ResponseWriter, r *http.Request) {
 		lang = "go"
 	}
 
-	// Truncate code to ~400 tokens worth of characters to keep costs low
+	// Truncate code to keep request small
 	code := body.UserCode
 	if len(code) > 1600 {
 		code = code[:1600] + "\n... (truncated)"
@@ -113,49 +109,42 @@ func HandleHint(w http.ResponseWriter, r *http.Request) {
 		code = "(no code written yet)"
 	}
 
-	systemPrompt := `You are a patient coding mentor helping a student solve a programming challenge.
+	// Instruct format that Mistral-7B-Instruct understands
+	prompt := fmt.Sprintf(`<s>[INST] You are a patient coding mentor. Give the student ONE short nudge (2-4 sentences) in the right direction — never write any code for them.
 
-Rules you MUST follow:
-1. NEVER write code for the student — not even a single line of solution code.
-2. Give ONE concise nudge: 2–4 sentences maximum.
-3. Focus on WHAT concept, approach, or mistake to reconsider — not HOW to fix it.
-4. Be encouraging and specific to what you actually see in their code.
-5. If no code has been written yet, suggest a starting approach without writing code.
-6. Do not repeat the question back to the student.`
-
-	userMessage := fmt.Sprintf(`Challenge: %s
-
+Challenge: %s
 Description: %s
 
 Student's current %s code:
 %s
 
-Give me a short nudge in the right direction without writing any code for me.`,
+Give a short hint pointing out what concept or approach they should reconsider. Do NOT write any code. Do NOT solve it for them. Be encouraging. [/INST]`,
 		body.QuestionTitle,
 		body.QuestionDescription,
 		lang,
 		code,
 	)
 
+	// Free HuggingFace Inference API — Mistral-7B-Instruct-v0.3
+	model := "HuggingFaceH4/zephyr-7b-beta"
+	hfURL := fmt.Sprintf("https://api-inference.huggingface.co/models/%s", model)
+
 	reqBody, _ := json.Marshal(map[string]interface{}{
-		"model":      "claude-sonnet-4-6",
-		"max_tokens": 180,
-		"stream":     true,
-		"system":     systemPrompt,
-		"messages": []map[string]string{
-			{"role": "user", "content": userMessage},
+		"inputs": prompt,
+		"parameters": map[string]interface{}{
+			"max_new_tokens":   180,
+			"temperature":      0.5,
+			"return_full_text": false,
 		},
 	})
 
-	req, err := http.NewRequestWithContext(r.Context(), "POST",
-		"https://api.anthropic.com/v1/messages", bytes.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(r.Context(), "POST", hfURL, bytes.NewReader(reqBody))
 	if err != nil {
 		http.Error(w, "failed to build AI request", 500)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -165,61 +154,63 @@ Give me a short nudge in the right direction without writing any code for me.`,
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		body2, _ := io.ReadAll(resp.Body)
-		http.Error(w, fmt.Sprintf("AI service error: %s", string(body2)), 502)
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, "failed to read AI response", 502)
 		return
 	}
 
-	// ── Stream SSE back to the browser ──────────────────────────────────────
+	if resp.StatusCode != 200 {
+		http.Error(w, fmt.Sprintf("AI service error: %s", string(respBytes)), 502)
+		return
+	}
+
+	// HF returns: [{"generated_text": "..."}]
+	var hfResp []struct {
+		GeneratedText string `json:"generated_text"`
+	}
+	if err := json.Unmarshal(respBytes, &hfResp); err != nil || len(hfResp) == 0 {
+		http.Error(w, "unexpected AI response format", 502)
+		return
+	}
+
+	hintText := strings.TrimSpace(hfResp[0].GeneratedText)
+
+	// Strip any accidental code blocks the model might produce
+	if idx := strings.Index(hintText, "```"); idx != -1 {
+		hintText = strings.TrimSpace(hintText[:idx])
+	}
+
+	// ── Respond as SSE ───────────────────────────────────────────────────────
+	// HF free tier doesn't stream, so we simulate word-by-word from the full
+	// response so the UI still feels progressive.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no") // disable nginx buffering if present
-	w.Header().Set("X-Hints-Remaining", fmt.Sprintf("%d", remaining))
+	w.Header().Set("X-Accel-Buffering", "no")
 
 	flusher, canFlush := w.(http.Flusher)
 
-	// Send remaining count as first event so the UI can update the badge
+	// Meta event — updates the hint badge immediately
 	fmt.Fprintf(w, "event: meta\ndata: {\"remaining\":%d,\"used\":%d,\"limit\":%d}\n\n",
 		remaining, used+1, maxHintsPerQuestion)
 	if canFlush {
 		flusher.Flush()
 	}
 
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if !strings.HasPrefix(line, "data: ") {
-			continue
+	// Emit word by word
+	words := strings.Fields(hintText)
+	for i, word := range words {
+		token := word
+		if i > 0 {
+			token = " " + word
 		}
-		data := strings.TrimPrefix(line, "data: ")
-		if data == "[DONE]" {
-			break
-		}
-
-		var event struct {
-			Type  string `json:"type"`
-			Delta struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"delta"`
-		}
-		if err := json.Unmarshal([]byte(data), &event); err != nil {
-			continue
-		}
-		if event.Type != "content_block_delta" || event.Delta.Type != "text_delta" {
-			continue
-		}
-
-		// Forward as a plain SSE "token" event
-		tokenJSON, _ := json.Marshal(event.Delta.Text)
+		tokenJSON, _ := json.Marshal(token)
 		fmt.Fprintf(w, "event: token\ndata: %s\n\n", tokenJSON)
 		if canFlush {
 			flusher.Flush()
 		}
 	}
 
-	// Signal the stream is done
 	fmt.Fprintf(w, "event: done\ndata: {}\n\n")
 	if canFlush {
 		flusher.Flush()
@@ -227,7 +218,6 @@ Give me a short nudge in the right direction without writing any code for me.`,
 }
 
 // ─── /api/hint/status ─────────────────────────────────────────────────────────
-// GET /api/hint/status?question_id=N  → returns how many hints used / remaining
 
 func HandleHintStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
