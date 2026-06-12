@@ -28,8 +28,10 @@ func RegisterRoutes() {
 	http.HandleFunc("/api/auth/register", WithCORS(HandleRegister))
 	http.HandleFunc("/api/auth/login", WithCORS(HandleLogin))
 	http.HandleFunc("/api/auth/logout", WithCORS(HandleLogout))
+	http.HandleFunc("/api/auth/forgot-password", WithCORS(HandleForgotPassword))
+	http.HandleFunc("/api/auth/reset-password", WithCORS(HandleResetPassword))
+	http.HandleFunc("/api/auth/validate-reset-token", WithCORS(HandleValidateResetToken))
 	http.HandleFunc("/api/me", WithCORS(HandleMe))
-
 	// Admin
 	http.HandleFunc("/api/admin/users", WithCORS(HandleAdminUsers))
 	http.HandleFunc("/api/admin/promote", WithCORS(HandleAdminPromote))

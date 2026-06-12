@@ -46,6 +46,20 @@
       <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="login-email" type="email" placeholder="you@example.com" onkeyup="if(event.key==='Enter')doLogin()"/></div>
       <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="login-password" type="password" placeholder="••••••••" onkeyup="if(event.key==='Enter')doLogin()"/></div>
       <button class="btn-primary" onclick="doLogin()">Enter the Arena</button>
+      <div style="text-align:center;margin-top:10px">
+        <a href="#" class="auth-link" onclick="showForgotForm();return false">Forgot password?</a>
+      </div>
+    </div>
+
+    <div id="forgot-form" style="display:none">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="forgot-email" type="email" placeholder="you@example.com" onkeyup="if(event.key==='Enter')doForgotPassword()"/>
+      </div>
+      <button class="btn-primary" onclick="doForgotPassword()">Send Reset Link</button>
+      <div style="text-align:center;margin-top:10px">
+        <a href="#" class="auth-link" onclick="showAuthTab('login');return false">← Back to login</a>
+      </div>
     </div>
     <div id="register-form" style="display:none">
       <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="reg-name" type="text" placeholder="Your handle"/></div>
@@ -54,6 +68,29 @@
       <button class="btn-primary" onclick="doRegister()">Create Account</button>
     </div>
     <div class="auth-error" id="auth-error"></div>
+    <div class="auth-success" id="auth-success" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Reset password page — shown when ?token= is in the URL -->
+<div id="reset-page" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:200;align-items:center;justify-content:center">
+  <div class="auth-card">
+    <div class="auth-logo">🔐</div>
+    <div class="auth-title">Set New Password</div>
+    <div id="reset-token-error" style="display:none;color:var(--color-danger,#e53);text-align:center;margin-bottom:12px"></div>
+    <div id="reset-form-inner">
+      <div class="form-group">
+        <label class="form-label">New Password</label>
+        <input class="form-input" id="reset-password" type="password" placeholder="Min 6 characters" onkeyup="if(event.key==='Enter')doResetPassword()"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirm Password</label>
+        <input class="form-input" id="reset-password2" type="password" placeholder="Repeat password" onkeyup="if(event.key==='Enter')doResetPassword()"/>
+      </div>
+      <button class="btn-primary" onclick="doResetPassword()">Update Password</button>
+    </div>
+    <div class="auth-error" id="reset-error"></div>
+    <div class="auth-success" id="reset-success" style="display:none"></div>
   </div>
 </div>
 

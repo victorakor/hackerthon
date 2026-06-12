@@ -427,3 +427,20 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
   display: flex; align-items: center; gap: 12px; padding: 8px 0;
   border-bottom: 1px solid var(--border, #2a2a3e); font-size: 13px; flex-wrap: wrap;
 }
+
+.auth-success {
+  color: var(--color-success, #2a9d5c);
+  font-size: 13px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.auth-link {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+}
+.auth-link:hover {
+  color: var(--accent, #7c6fff);
+  text-decoration: underline;
+}

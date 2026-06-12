@@ -197,10 +197,21 @@ func createTables() error {
 	DB.Exec(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
 	DB.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_cases TEXT NOT NULL DEFAULT '[]'`)
 	DB.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_file TEXT NOT NULL DEFAULT ''`)
-	
+
 	// Challenge/tournament columns added in v2
 	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS challenger_score INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_score INTEGER NOT NULL DEFAULT 0`)
+
+	// Password reset tokens added in v3
+	DB.Exec(`CREATE TABLE IF NOT EXISTS password_resets (
+		id         SERIAL PRIMARY KEY,
+		user_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		token      TEXT NOT NULL UNIQUE,
+		expires_at TIMESTAMPTZ NOT NULL,
+		used       BOOLEAN NOT NULL DEFAULT FALSE
+	)`)
+
+	// Anti-cheat columns added in v3
 
 	// Anti-cheat columns added in v3
 	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS violation_count INTEGER NOT NULL DEFAULT 0`)
