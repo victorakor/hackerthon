@@ -1,12 +1,13 @@
 package app
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
-	"net/smtp"
 	"os"
 	"strings"
 	"time"
@@ -21,36 +22,52 @@ func generateResetToken() string {
 	return hex.EncodeToString(b)
 }
 
-// sendResetEmail sends the password-reset link via SMTP.
-// Required env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, APP_URL
+// sendResetEmail sends the password-reset link via the Resend HTTP API.
+// Required env vars: RESEND_API_KEY, RESEND_FROM, APP_URL
 func sendResetEmail(toEmail, token string) error {
-	host := os.Getenv("SMTP_HOST")
-	port := os.Getenv("SMTP_PORT")
-	user := os.Getenv("SMTP_USER")
-	pass := os.Getenv("SMTP_PASS")
+	apiKey := os.Getenv("RESEND_API_KEY")
+	from := os.Getenv("RESEND_FROM")
 	appURL := os.Getenv("APP_URL")
 
-	if host == "" || user == "" || pass == "" || appURL == "" {
-		return fmt.Errorf("SMTP not configured")
-	}
-	if port == "" {
-		port = "587"
+	if apiKey == "" || from == "" || appURL == "" {
+		return fmt.Errorf("resend not configured")
 	}
 
 	link := appURL + "/reset-password?token=" + token
-	subject := "Reset your Hackerthon password"
-	body := "Hi,\r\n\r\n" +
-		"Click the link below to set a new password. It expires in 1 hour.\r\n\r\n" +
-		link + "\r\n\r\n" +
-		"If you didn't request this, you can safely ignore this email.\r\n"
+	html := "<p>Hi,</p>" +
+		"<p>Click the link below to set a new password. It expires in 1 hour.</p>" +
+		"<p><a href=\"" + link + "\">" + link + "</a></p>" +
+		"<p>If you didn't request this, you can safely ignore this email.</p>"
 
-	msg := "From: " + user + "\r\n" +
-		"To: " + toEmail + "\r\n" +
-		"Subject: " + subject + "\r\n" +
-		"\r\n" + body
+	payload := map[string]interface{}{
+		"from":    from,
+		"to":      []string{toEmail},
+		"subject": "Reset your Hackerthon password",
+		"html":    html,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
 
-	auth := smtp.PlainAuth("", user, pass, host)
-	return smtp.SendMail(host+":"+port, auth, user, []string{toEmail}, []byte(msg))
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("resend error: status %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
 }
 
 // POST /api/auth/forgot-password
