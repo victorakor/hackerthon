@@ -58,6 +58,8 @@ async function doLogout() {
   if (currentUser) {
     sessionStorage.removeItem('ch_arena_' + currentUser.id);
     sessionStorage.removeItem('t_arena_' + currentUser.id);
+    // Reset the notification cursor so the next user starts fresh
+    // but keep it for same-user re-login (don't remove their lastNotifID)
   }
   authToken = null;
   currentUser = null;

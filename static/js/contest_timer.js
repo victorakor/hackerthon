@@ -138,8 +138,16 @@ var ContestTimer = {
 var _notifPollTimer = null;
 var _lastNotifID    = 0;
 
+function _notifIDKey() {
+  return 'lastNotifID_' + (currentUser ? currentUser.id : 'anon');
+}
+
 function startNotificationPolling() {
   if (_notifPollTimer) return;
+  // Restore the last-seen notification ID from localStorage so old
+  // contest_end / tournament_end events are never re-dispatched on reload or login
+  var saved = parseInt(localStorage.getItem(_notifIDKey()) || '0', 10);
+  if (saved > _lastNotifID) _lastNotifID = saved;
   pollNotifications(); // immediate first check
   _notifPollTimer = setInterval(pollNotifications, 15000);
 }
@@ -159,7 +167,11 @@ async function pollNotifications() {
     if (!notifs || notifs.length === 0) return;
 
     notifs.forEach(function(n) {
-      if (n.id > _lastNotifID) _lastNotifID = n.id;
+      if (n.id > _lastNotifID) {
+        _lastNotifID = n.id;
+        // Persist so reloads and re-logins don't re-dispatch old events
+        localStorage.setItem(_notifIDKey(), _lastNotifID);
+      }
       dispatchNotification(n);
     });
   } catch(e) {}

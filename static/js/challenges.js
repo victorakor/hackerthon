@@ -2,7 +2,8 @@
 
 var _activeChallengeID = null;  // challenge we are currently competing in
 
-// localStorage key for challenges seen-state: "ch_seen_<userID>" → JSON array of seen challenge IDs
+// ── Seen-state helpers (badge persistence) ────────────────────────────────────
+
 function _chSeenKey() {
   return 'ch_seen_' + (currentUser ? currentUser.id : 'anon');
 }
@@ -15,8 +16,8 @@ function _markChallengesSeen(ids) {
   localStorage.setItem(_chSeenKey(), JSON.stringify(seen));
 }
 
-// Called on enterApp — silently checks if there are unseen challenges
-// (participant only) and lights the badge, then resumes an active arena if needed
+// Called once on enterApp — lights the badge if user has unseen challenges.
+// Never auto-opens any arena popup.
 async function initChallengeBadge() {
   try {
     var res = await apiFetch('/api/challenges');
@@ -29,36 +30,15 @@ async function initChallengeBadge() {
       return seen.indexOf(c.id) === -1;
     });
     if (hasUnseen) showNotifBadge();
-
-    // Resume active arena silently (only if mid-contest, no popup on simple reload)
-    var active = challenges.find(function(c) { return c.status === 'active'; });
-    if (!active) return;
-
-    // Only auto-enter if contest was already running in this session
-    var arenaKey = 'ch_arena_' + (currentUser ? currentUser.id : 'anon');
-    var arenaActive = sessionStorage.getItem(arenaKey);
-    if (!arenaActive) return;  // fresh load — don't auto-popup
-
-    var detail = await (await apiFetch('/api/challenges/' + active.id)).json();
-    _activeChallengeID = active.id;
-    ContestTimer.resume('challenge', active.id, active.scheduled_at,
-      detail.question_ids || [],
-      {
-        onStart: function() {},
-        onEnd:   function() { onContestEnd({ challenge_id: active.id }); }
-      }
-    );
-    showChallengeArena(active.id, detail.question_ids || [], active.scheduled_at);
   } catch(e) {}
 }
 
-// ── Entry point ───────────────────────────────────────────────────────────────
+// ── Entry point (called when user clicks the Challenges tab) ──────────────────
 
 async function initChallengesTab() {
-  // Clear the alert badge — user has now opened the tab
   hideNotifBadge();
   await loadChallengeList();
-  // Mark all currently-visible challenges as seen
+  // Mark all visible challenges as seen so badge won't re-light for these
   try {
     var res2 = await apiFetch('/api/challenges');
     if (res2.ok) {
@@ -66,7 +46,7 @@ async function initChallengesTab() {
       _markChallengesSeen(all.map(function(c) { return c.id; }));
     }
   } catch(e) {}
-  await checkForActiveChallenge();
+  // No auto-arena here — user clicks "Enter Arena" on the card themselves
 }
 
 // ── Load & render challenge list ──────────────────────────────────────────────
@@ -186,7 +166,6 @@ async function sendChallenge() {
     return;
   }
 
-  // Convert local datetime-local input to UTC ISO string
   var scheduledAt = new Date(localDt).toISOString();
 
   try {
@@ -213,7 +192,6 @@ async function sendChallenge() {
 // ── Accept / Reject ───────────────────────────────────────────────────────────
 
 function acceptChallenge(id) {
-  // Find the challenge data already rendered so we can show the scheduled time in the confirm dialog
   var card = document.getElementById('challenge-' + id);
   var timeText = card ? card.querySelector('.challenge-meta') : null;
   var scheduledLabel = timeText ? timeText.textContent.replace('📅', '').trim() : '';
@@ -246,34 +224,6 @@ async function rejectChallenge(id) {
   } catch(e) { showToast('Network error.', 'error'); }
 }
 
-// ── Check for active challenge on load ────────────────────────────────────────
-
-async function checkForActiveChallenge() {
-  try {
-    var res = await apiFetch('/api/challenges');
-    if (!res.ok) return;
-    var challenges = await res.json();
-    var active = challenges.find(function(c) { return c.status === 'active'; });
-    if (!active) return;
-
-    // Mark session so that next reload resumes the arena automatically
-    var arenaKey = 'ch_arena_' + (currentUser ? currentUser.id : 'anon');
-    sessionStorage.setItem(arenaKey, '1');
-
-    // Resume the timer — contest is already running
-    var detail = await (await apiFetch('/api/challenges/' + active.id)).json();
-    _activeChallengeID = active.id;
-    ContestTimer.resume('challenge', active.id, active.scheduled_at,
-      detail.question_ids || [],
-      {
-        onStart: function() {},   // already active
-        onEnd:   function() { onContestEnd({ challenge_id: active.id }); }
-      }
-    );
-    showChallengeArena(active.id, detail.question_ids || [], active.scheduled_at);
-  } catch(e) {}
-}
-
 // ── Enter / show arena ────────────────────────────────────────────────────────
 
 async function enterChallengeArena(id) {
@@ -286,7 +236,6 @@ async function enterChallengeArena(id) {
     if (detail.status === 'active') {
       showChallengeArena(id, detail.question_ids || [], detail.scheduled_at);
     } else {
-      // Not started yet — schedule the timer
       ContestTimer.schedule('challenge', id, detail.scheduled_at, detail.question_ids || [], {
         onStart: function(qids) { showChallengeArena(id, qids, detail.scheduled_at); },
         onEnd:   function()     { onContestEnd({ challenge_id: id }); }
@@ -297,7 +246,6 @@ async function enterChallengeArena(id) {
 }
 
 function showChallengeArena(challengeID, questionIDs, scheduledAt) {
-  // Switch to the Questions tab in contest mode
   if (typeof switchTab === 'function') switchTab('questions');
   if (typeof enterContestMode === 'function') {
     enterContestMode('challenge', challengeID, questionIDs, scheduledAt);
@@ -356,7 +304,8 @@ function showResultModal(r) {
 onChallengeReceived = function(p) {
   showNotifBadge();
   showToast('⚔️ ' + escHtml(p.challenger_name || 'Someone') + ' challenged you! Check the Challenges tab.');
-  loadChallengeList();
+  // Mark as unseen so badge persists across reloads
+  // (badge clears only when user opens the tab)
 };
 
 onChallengeAccepted = function(p) {
@@ -371,7 +320,6 @@ onChallengeRejected = function(p) {
 };
 
 onChallengeNeedsQuestions = function(p) {
-  // Admin-only toast
   if (currentUser && currentUser.is_admin) {
     showToast('📋 Challenge #' + p.challenge_id + ' needs questions assigned.', 'info');
   }
@@ -379,19 +327,17 @@ onChallengeNeedsQuestions = function(p) {
 
 onContestStart = function(p) {
   if (!p.challenge_id) return;
-  var arenaKey = 'ch_arena_' + (currentUser ? currentUser.id : 'anon');
-  sessionStorage.setItem(arenaKey, '1');
   showToast('🚀 Challenge #' + p.challenge_id + ' has started!');
+  // Auto-enter the arena because the live event just fired — this is intentional
   enterChallengeArena(p.challenge_id);
 };
 
 onContestEnd = function(p) {
   ContestTimer.clear();
-  // Clear the session flag so a fresh login won't auto-enter a finished arena
-  var arenaKey = 'ch_arena_' + (currentUser ? currentUser.id : 'anon');
-  sessionStorage.removeItem(arenaKey);
   showToast('⏱️ Challenge over! Fetching results…');
   if (typeof exitContestMode === 'function') exitContestMode();
+  // Light the badge so the user knows there's a result
+  showNotifBadge();
   setTimeout(function() {
     if (p.challenge_id) viewChallengeResult(p.challenge_id);
     loadChallengeList();
@@ -432,7 +378,6 @@ async function loadAdminChallenges() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function toLocalDatetimeInput(date) {
-  // Returns "YYYY-MM-DDTHH:MM" in local time for datetime-local inputs
   var pad = function(n) { return String(n).padStart(2,'0'); };
   return date.getFullYear() + '-' + pad(date.getMonth()+1) + '-' + pad(date.getDate()) +
     'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());

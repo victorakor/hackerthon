@@ -1,10 +1,9 @@
 // ── Tournaments ───────────────────────────────────────────────────────────────
 
-// ── Entry point ───────────────────────────────────────────────────────────────
-
 var _activeTournamentID = null;
 
-// Badge helpers for the Tournaments tab
+// ── Badge helpers ─────────────────────────────────────────────────────────────
+
 function showTournamentBadge() {
   var b = document.getElementById('tournament-badge');
   if (b) b.style.display = 'inline-block';
@@ -14,7 +13,8 @@ function hideTournamentBadge() {
   if (b) b.style.display = 'none';
 }
 
-// localStorage seen-state for tournaments
+// ── Seen-state helpers ────────────────────────────────────────────────────────
+
 function _tSeenKey() {
   return 't_seen_' + (currentUser ? currentUser.id : 'anon');
 }
@@ -27,8 +27,10 @@ function _markTournamentsSeen(ids) {
   localStorage.setItem(_tSeenKey(), JSON.stringify(seen));
 }
 
-// Called on enterApp — lights the badge if user has unseen tournaments they're joined in,
-// and silently resumes an active arena only if it was already open this session
+// Called once on enterApp — lights the badge if:
+//   - user is a participant in a tournament they haven't seen yet, OR
+//   - any new upcoming tournament exists that hasn't been seen.
+// Never auto-opens any arena popup.
 async function initTournamentBadge() {
   try {
     var res = await apiFetch('/api/tournaments');
@@ -36,47 +38,22 @@ async function initTournamentBadge() {
     var tournaments = await res.json();
     if (!tournaments.length) return;
 
-    // Only show badge for tournaments the user joined (or any new tournament for non-participants)
-    var joined = tournaments.filter(function(t) { return t.is_joined; });
     var seen = _getSeenTournaments();
-
-    // Badge for participants: any joined tournament they haven't seen
-    var hasUnseen = joined.some(function(t) { return seen.indexOf(t.id) === -1; });
-
-    // Badge for non-participants: any brand-new (upcoming) tournament they haven't seen
-    if (!hasUnseen) {
-      var upcoming = tournaments.filter(function(t) { return t.status === 'upcoming' && seen.indexOf(t.id) === -1; });
-      hasUnseen = upcoming.length > 0;
-    }
-
+    var hasUnseen = tournaments.some(function(t) {
+      // Participants see badge for any unseen tournament they're in
+      // Non-participants see badge for new upcoming tournaments
+      return seen.indexOf(t.id) === -1 && (t.is_joined || t.status === 'upcoming');
+    });
     if (hasUnseen) showTournamentBadge();
-
-    // Only auto-resume active arena if it was already open in this session
-    var active = joined.find(function(t) { return t.status === 'active'; });
-    if (!active) return;
-
-    var arenaKey = 't_arena_' + (currentUser ? currentUser.id : 'anon');
-    var arenaActive = sessionStorage.getItem(arenaKey);
-    if (!arenaActive) return;  // fresh login — don't auto-popup
-
-    var detail = await (await apiFetch('/api/tournaments/' + active.id)).json();
-    _activeTournamentID = active.id;
-    ContestTimer.resume('tournament', active.id, active.scheduled_at,
-      detail.question_ids || [],
-      {
-        onStart: function() {},
-        onEnd:   function() { onTournamentEnd({ tournament_id: active.id }); }
-      }
-    );
-    showTournamentArena(active.id, detail.question_ids || [], active.scheduled_at);
   } catch(e) {}
 }
 
+// ── Entry point (called when user clicks the Tournaments tab) ─────────────────
+
 async function initTournamentsTab() {
-  // Clear the alert badge — user has now opened the tab
   hideTournamentBadge();
   await loadTournamentList();
-  // Mark all currently-visible tournaments as seen
+  // Mark all visible tournaments as seen
   try {
     var res2 = await apiFetch('/api/tournaments');
     if (res2.ok) {
@@ -84,7 +61,7 @@ async function initTournamentsTab() {
       _markTournamentsSeen(all.map(function(t) { return t.id; }));
     }
   } catch(e) {}
-  await checkForActiveTournament();
+  // No auto-arena here — user clicks "Enter Arena" on the card themselves
 }
 
 // ── Load & render tournament list ─────────────────────────────────────────────
@@ -104,7 +81,6 @@ async function loadTournamentList() {
       return;
     }
 
-    // Group by status
     var upcoming  = tournaments.filter(function(t) { return t.status === 'upcoming'; });
     var active    = tournaments.filter(function(t) { return t.status === 'active'; });
     var completed = tournaments.filter(function(t) { return t.status === 'completed'; });
@@ -166,7 +142,6 @@ function renderTournamentCard(t) {
 // ── Join / Leave ──────────────────────────────────────────────────────────────
 
 function joinTournament(id) {
-  // Find the card already rendered so we can show the time in the confirm
   var card = document.getElementById('tournament-' + id);
   var timeText = card ? card.querySelector('.tournament-meta') : null;
   var scheduledLabel = timeText ? timeText.textContent.replace('📅', '').replace('⏱️ 1 hour', '').replace('·', '').trim() : '';
@@ -197,37 +172,6 @@ async function leaveTournament(id) {
     showToast('You\'ve left the tournament.');
     loadTournamentList();
   } catch(e) { showToast('Network error.', 'error'); }
-}
-
-// ── Check for active tournament on load ───────────────────────────────────────
-
-async function checkForActiveTournament() {
-  try {
-    var res = await apiFetch('/api/tournaments');
-    if (!res.ok) return;
-    var tournaments = await res.json();
-
-    // Joined and active
-    var active = tournaments.find(function(t) {
-      return t.status === 'active' && t.is_joined;
-    });
-    if (!active) return;
-
-    // Mark session so reload within the same session resumes the arena
-    var arenaKey = 't_arena_' + (currentUser ? currentUser.id : 'anon');
-    sessionStorage.setItem(arenaKey, '1');
-
-    var detail = await (await apiFetch('/api/tournaments/' + active.id)).json();
-    _activeTournamentID = active.id;
-    ContestTimer.resume('tournament', active.id, active.scheduled_at,
-      detail.question_ids || [],
-      {
-        onStart: function() {},
-        onEnd:   function() { onTournamentEnd({ tournament_id: active.id }); }
-      }
-    );
-    showTournamentArena(active.id, detail.question_ids || [], active.scheduled_at);
-  } catch(e) {}
 }
 
 // ── Enter arena ───────────────────────────────────────────────────────────────
@@ -308,19 +252,16 @@ function showLeaderboardModal(data) {
 // ── Notification handlers ─────────────────────────────────────────────────────
 
 onTournamentStart = function(p) {
-  var arenaKey = 't_arena_' + (currentUser ? currentUser.id : 'anon');
-  sessionStorage.setItem(arenaKey, '1');
   showToast('🚀 Tournament #' + p.tournament_id + ' has started! Get ready!');
+  // Auto-enter because the live event just fired — intentional
   enterTournamentArena(p.tournament_id);
 };
 
 onTournamentEnd = function(p) {
   ContestTimer.clear();
-  var arenaKey = 't_arena_' + (currentUser ? currentUser.id : 'anon');
-  sessionStorage.removeItem(arenaKey);
   showToast('⏱️ Tournament over! Loading results…');
   if (typeof exitContestMode === 'function') exitContestMode();
-  // Show badge so user knows there's a new result to view
+  // Light badge so user knows there's a result
   showTournamentBadge();
   setTimeout(function() {
     if (p.tournament_id) viewTournamentLeaderboard(p.tournament_id);
@@ -391,8 +332,6 @@ async function submitCreateTournament() {
     document.getElementById('create-tournament-modal').remove();
     showToast('Tournament created! ✅ Now assign questions.');
     loadTournamentList();
-
-    // Immediately open question assignment for this tournament
     openAssignQuestionsModal('tournament', data.id);
   } catch(e) {
     errEl.textContent = 'Network error.';
@@ -406,7 +345,6 @@ async function openAssignQuestionsModal(type, id) {
   var existing = document.getElementById('assign-q-modal');
   if (existing) existing.remove();
 
-  // Load all available questions
   var res = await apiFetch('/api/questions');
   if (!res.ok) { showToast('Could not load questions.', 'error'); return; }
   var questions = await res.json();
