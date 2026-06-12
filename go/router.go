@@ -8,6 +8,24 @@ import (
 	"time"
 )
 
+// spaHandler serves static files when they exist, otherwise falls back to
+// index.html so the frontend JS can handle client-side routes like /reset-password.
+type spaHandler struct {
+	fs http.Handler
+}
+
+func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Let the real file server try first
+	path := "static" + r.URL.Path
+	_, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		// No matching file — serve index.html and let JS handle the route
+		http.ServeFile(w, r, "static/index.html")
+		return
+	}
+	h.fs.ServeHTTP(w, r)
+}
+
 func WithCORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -22,7 +40,7 @@ func WithCORS(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func RegisterRoutes() {
-	http.Handle("/", http.FileServer(http.Dir("static")))
+	http.Handle("/", spaHandler{fs: http.FileServer(http.Dir("static"))})
 
 	// Auth
 	http.HandleFunc("/api/auth/register", WithCORS(HandleRegister))
