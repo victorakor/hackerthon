@@ -24,3 +24,27 @@ function showToast(msg, type) {
   document.body.appendChild(el);
   setTimeout(function() { el.remove(); }, 4000);
 }
+
+function showConfirmModal(title, bodyHtml, confirmLabel, onConfirm) {
+  var existing = document.getElementById('confirm-modal');
+  if (existing) existing.remove();
+
+  var el = document.createElement('div');
+  el.id = 'confirm-modal';
+  el.className = 'modal-overlay';
+  el.innerHTML =
+    '<div class="modal-box">' +
+      '<h3>' + escHtml(title) + '</h3>' +
+      '<p class="modal-confirm-body">' + bodyHtml + '</p>' +
+      '<div class="modal-actions">' +
+        '<button class="btn btn-primary btn-sm" id="confirm-modal-ok">' + escHtml(confirmLabel) + '</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'confirm-modal\').remove()">Cancel</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(el);
+
+  document.getElementById('confirm-modal-ok').addEventListener('click', function() {
+    el.remove();
+    onConfirm();
+  });
+}

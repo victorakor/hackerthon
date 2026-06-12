@@ -173,6 +173,11 @@ func HandleJoinTournament(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if overlap, err := HasContestOverlap(u.ID, t.ScheduledAt); err != nil || overlap {
+		http.Error(w, "you already have a contest scheduled at that time", 409)
+		return
+	}
+
 	_, err = DB.Exec(`
 		INSERT INTO tournament_participants (tournament_id, user_id) VALUES ($1,$2)
 		ON CONFLICT DO NOTHING`, id, u.ID)

@@ -433,3 +433,42 @@ func SeedQuestions() error {
 	log.Printf("✓ Seeded %d questions", len(seeds))
 	return nil
 }
+
+// HasContestOverlap returns true if the given user already has an accepted challenge
+// or joined upcoming/active tournament whose 1-hour window overlaps [start, start+1h).
+func HasContestOverlap(userID int, start time.Time) (bool, error) {
+	end := start.Add(time.Hour)
+
+	// Check challenges: status accepted or active, window overlaps
+	var challengeConflict bool
+	err := DB.QueryRow(`
+        SELECT EXISTS(
+            SELECT 1 FROM challenges
+            WHERE status IN ('accepted', 'active')
+            AND (challenger_id = $1 OR opponent_id = $1)
+            AND scheduled_at < $3
+            AND scheduled_at + INTERVAL '1 hour' > $2
+        )`, userID, start, end).Scan(&challengeConflict)
+	if err != nil {
+		return false, err
+	}
+	if challengeConflict {
+		return true, nil
+	}
+
+	// Check tournaments: user is joined and tournament is upcoming or active, window overlaps
+	var tournamentConflict bool
+	err = DB.QueryRow(`
+        SELECT EXISTS(
+            SELECT 1 FROM tournaments t
+            JOIN tournament_participants tp ON tp.tournament_id = t.id
+            WHERE tp.user_id = $1
+            AND t.status IN ('upcoming', 'active')
+            AND t.scheduled_at < $3
+            AND t.scheduled_at + INTERVAL '1 hour' > $2
+        )`, userID, start, end).Scan(&tournamentConflict)
+	if err != nil {
+		return false, err
+	}
+	return tournamentConflict, nil
+}

@@ -68,6 +68,17 @@ func HandleCreateChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check challenger has no overlapping contest at this time
+	if overlap, err := HasContestOverlap(u.ID, scheduledAt); err != nil || overlap {
+		http.Error(w, "you already have a contest scheduled at that time", 409)
+		return
+	}
+	// Check opponent has no overlapping contest at this time
+	if overlap, err := HasContestOverlap(body.OpponentID, scheduledAt); err != nil || overlap {
+		http.Error(w, "your opponent already has a contest scheduled at that time", 409)
+		return
+	}
+
 	var id int
 	err = DB.QueryRow(`
 		INSERT INTO challenges (challenger_id, opponent_id, scheduled_at)
@@ -134,6 +145,16 @@ func HandleAcceptChallenge(w http.ResponseWriter, r *http.Request) {
 	}
 	if c.Status != "pending" {
 		http.Error(w, "challenge is not pending", 409)
+		return
+	}
+	
+	// Re-check overlap for both users at accept time
+	if overlap, err := HasContestOverlap(u.ID, c.ScheduledAt); err != nil || overlap {
+		http.Error(w, "you already have a contest at that time", 409)
+		return
+	}
+	if overlap, err := HasContestOverlap(c.ChallengerID, c.ScheduledAt); err != nil || overlap {
+		http.Error(w, "the challenger already has a contest at that time", 409)
 		return
 	}
 

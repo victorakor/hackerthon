@@ -135,9 +135,9 @@ async function sendChallenge() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ opponent_id: opponentID, scheduled_at: scheduledAt })
     });
-    var data = await res.json();
     if (!res.ok) {
-      errEl.textContent = data.message || data || 'Failed to send challenge.';
+      var errText = await res.text();
+      errEl.textContent = errText.trim() || 'Failed to send challenge.';
       errEl.style.display = 'block';
       return;
     }
@@ -152,13 +152,29 @@ async function sendChallenge() {
 
 // ── Accept / Reject ───────────────────────────────────────────────────────────
 
-async function acceptChallenge(id) {
-  try {
-    var res = await apiFetch('/api/challenges/' + id + '/accept', { method: 'PATCH' });
-    if (!res.ok) { showToast('Failed to accept.', 'error'); return; }
-    showToast('Challenge accepted! The admin will assign questions.');
-    loadChallengeList();
-  } catch(e) { showToast('Network error.', 'error'); }
+function acceptChallenge(id) {
+  // Find the challenge data already rendered so we can show the scheduled time in the confirm dialog
+  var card = document.getElementById('challenge-' + id);
+  var timeText = card ? card.querySelector('.challenge-meta') : null;
+  var scheduledLabel = timeText ? timeText.textContent.replace('📅', '').trim() : '';
+
+  showConfirmModal(
+    '⚔️ Accept Challenge?',
+    scheduledLabel ? 'This challenge is scheduled for <strong>' + escHtml(scheduledLabel) + '</strong>.<br>Make sure you have no other contests at that time — accepting will lock the slot.' : 'Make sure you have no other contests at that time — accepting will lock the slot.',
+    'Accept',
+    async function() {
+      try {
+        var res = await apiFetch('/api/challenges/' + id + '/accept', { method: 'PATCH' });
+        if (!res.ok) {
+          var errText = await res.text();
+          showToast((errText.trim() || 'Failed to accept.'), 'error');
+          return;
+        }
+        showToast('Challenge accepted! The admin will assign questions.');
+        loadChallengeList();
+      } catch(e) { showToast('Network error.', 'error'); }
+    }
+  );
 }
 
 async function rejectChallenge(id) {

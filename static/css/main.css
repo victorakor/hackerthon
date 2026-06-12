@@ -270,7 +270,15 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 .toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;z-index:9999;animation:toast-in .3s ease;max-width:320px}
 .toast.success{background:#0d2a1a;border:1px solid var(--accent2);color:var(--accent2)}
 .toast.error{background:#2a0d0d;border:1px solid var(--hard);color:var(--hard)}
+.toast.info{background:#0d1e2a;border:1px solid var(--accent);color:var(--accent)}
 @keyframes toast-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.btn-ghost{padding:4px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font-mono);font-size:10px;cursor:pointer;transition:all .2s}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-success{border-color:var(--accent2);color:var(--accent2);background:rgba(0,255,157,0.05)}
+.btn-success:hover{background:rgba(0,255,157,0.15)}
+.btn-secondary{border-color:var(--border);color:var(--muted);background:transparent}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
+.modal-confirm-body{font-size:13px;color:var(--fg,#e0e0e0);line-height:1.6;margin:0 0 4px}
 /* dim submit button at the begining*/
 .btn-send:disabled {
   opacity: .4;

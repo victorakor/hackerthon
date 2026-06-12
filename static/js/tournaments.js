@@ -87,17 +87,29 @@ function renderTournamentCard(t) {
 
 // ── Join / Leave ──────────────────────────────────────────────────────────────
 
-async function joinTournament(id) {
-  try {
-    var res = await apiFetch('/api/tournaments/' + id + '/join', { method: 'POST' });
-    if (!res.ok) {
-      var err = await res.text();
-      showToast(err || 'Failed to join.', 'error');
-      return;
+function joinTournament(id) {
+  // Find the card already rendered so we can show the time in the confirm
+  var card = document.getElementById('tournament-' + id);
+  var timeText = card ? card.querySelector('.tournament-meta') : null;
+  var scheduledLabel = timeText ? timeText.textContent.replace('📅', '').replace('⏱️ 1 hour', '').replace('·', '').trim() : '';
+
+  showConfirmModal(
+    '📅 Join Tournament?',
+    scheduledLabel ? 'This tournament starts on <strong>' + escHtml(scheduledLabel) + '</strong> and lasts 1 hour.<br>Make sure you have no challenges or other tournaments scheduled at that time.' : 'Make sure you have no other contests scheduled at that time.',
+    'Join',
+    async function() {
+      try {
+        var res = await apiFetch('/api/tournaments/' + id + '/join', { method: 'POST' });
+        if (!res.ok) {
+          var err = await res.text();
+          showToast(err.trim() || 'Failed to join.', 'error');
+          return;
+        }
+        showToast('You\'re registered! ✅');
+        loadTournamentList();
+      } catch(e) { showToast('Network error.', 'error'); }
     }
-    showToast('You\'re registered! ✅');
-    loadTournamentList();
-  } catch(e) { showToast('Network error.', 'error'); }
+  );
 }
 
 async function leaveTournament(id) {
