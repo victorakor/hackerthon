@@ -147,7 +147,7 @@ func HandleAcceptChallenge(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "challenge is not pending", 409)
 		return
 	}
-	
+
 	// Re-check overlap for both users at accept time
 	if overlap, err := HasContestOverlap(u.ID, c.ScheduledAt); err != nil || overlap {
 		http.Error(w, "you already have a contest at that time", 409)
@@ -378,6 +378,19 @@ func HandleChallengeSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reject submissions from disqualified participants
+	isChallenger := c.ChallengerID == u.ID
+	var disqualified bool
+	if isChallenger {
+		DB.QueryRow(`SELECT COALESCE(challenger_disqualified, FALSE) FROM challenges WHERE id=$1`, id).Scan(&disqualified)
+	} else {
+		DB.QueryRow(`SELECT COALESCE(opponent_disqualified, FALSE) FROM challenges WHERE id=$1`, id).Scan(&disqualified)
+	}
+	if disqualified {
+		http.Error(w, "you have been disqualified from this challenge", 403)
+		return
+	}
+
 	var body struct {
 		QuestionID int  `json:"question_id"`
 		Passed     bool `json:"passed"`
@@ -486,4 +499,79 @@ func parseIDFromPath(path, prefix, suffix string) int {
 	}
 	id, _ := strconv.Atoi(s)
 	return id
+}
+
+// POST /api/challenges/{id}/violation
+// Body: { "type": "copy_paste" | "tab_switch" | "logout" }
+func HandleChallengeViolation(w http.ResponseWriter, r *http.Request) {
+	u := RequireAuth(w, r)
+	if u == nil {
+		return
+	}
+	id := parseIDFromPath(r.URL.Path, "/api/challenges/", "/violation")
+	if id == 0 {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+
+	c, err := GetChallenge(id)
+	if err != nil {
+		http.Error(w, "challenge not found", 404)
+		return
+	}
+	if c.Status != "active" {
+		http.Error(w, "challenge is not active", 409)
+		return
+	}
+	if c.ChallengerID != u.ID && c.OpponentID != u.ID {
+		http.Error(w, "you are not a participant", 403)
+		return
+	}
+
+	var body struct {
+		Type string `json:"type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON", 400)
+		return
+	}
+
+	isChallenger := c.ChallengerID == u.ID
+
+	if body.Type == "logout" {
+		if isChallenger {
+			DB.Exec(`UPDATE challenges SET challenger_disqualified=TRUE WHERE id=$1`, id)
+		} else {
+			DB.Exec(`UPDATE challenges SET opponent_disqualified=TRUE WHERE id=$1`, id)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"disqualified": true, "violation_count": 2})
+		return
+	}
+
+	var newCount int
+	if isChallenger {
+		DB.QueryRow(`
+			UPDATE challenges SET challenger_violations = challenger_violations + 1
+			WHERE id=$1 RETURNING challenger_violations`, id).Scan(&newCount)
+	} else {
+		DB.QueryRow(`
+			UPDATE challenges SET opponent_violations = opponent_violations + 1
+			WHERE id=$1 RETURNING opponent_violations`, id).Scan(&newCount)
+	}
+
+	disqualified := newCount >= 2
+	if disqualified {
+		if isChallenger {
+			DB.Exec(`UPDATE challenges SET challenger_disqualified=TRUE WHERE id=$1`, id)
+		} else {
+			DB.Exec(`UPDATE challenges SET opponent_disqualified=TRUE WHERE id=$1`, id)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"violation_count": newCount,
+		"disqualified":    disqualified,
+	})
 }

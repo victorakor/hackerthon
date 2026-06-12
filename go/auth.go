@@ -16,10 +16,15 @@ func GenerateToken() string {
 
 func GetUserFromToken(r *http.Request) (*User, error) {
 	auth := r.Header.Get("Authorization")
-	if !strings.HasPrefix(auth, "Bearer ") {
+	var token string
+	if strings.HasPrefix(auth, "Bearer ") {
+		token = strings.TrimPrefix(auth, "Bearer ")
+	} else if t := r.URL.Query().Get("token"); t != "" {
+		// Fallback for sendBeacon requests that can't set headers
+		token = t
+	} else {
 		return nil, fmt.Errorf("no token")
 	}
-	token := strings.TrimPrefix(auth, "Bearer ")
 	var u User
 	err := DB.QueryRow(`
 		SELECT u.id, u.name, u.email, u.is_admin

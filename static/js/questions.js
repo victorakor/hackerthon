@@ -209,6 +209,9 @@ function enterContestMode(type, id, questionIDs, scheduledAt) {
   _activeContestType = type;
   _activeContestID = id;
 
+  // Start anti-cheat monitoring
+  if (typeof AntiCheat !== 'undefined') AntiCheat.start(type, id);
+
   // Filter the visible questions to only contest questions
   var allCards = document.querySelectorAll('.question-card');
   allCards.forEach(function(card) {
@@ -245,4 +248,6 @@ function exitContestMode() {
   var banner = document.getElementById('contest-mode-banner');
   if (banner) banner.style.display = 'none';
   ContestTimer.clear();
+  // Stop anti-cheat monitoring
+  if (typeof AntiCheat !== 'undefined') AntiCheat.stop();
 }

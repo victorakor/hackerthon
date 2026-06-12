@@ -195,10 +195,14 @@ function showLeaderboardModal(data) {
   var rows = (data.ranks || []).map(function(r) {
     var medal = r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : r.rank + '.';
     var isMe  = r.user_id === me ? ' lb-row-me' : '';
-    return '<tr class="lb-row' + isMe + '">' +
+    var dqBadge = r.disqualified ? ' <span class="badge badge-danger" title="Disqualified">DQ</span>' : '';
+    var scoreCell = r.disqualified
+      ? '<td class="lb-score" style="color:var(--color-danger,#e53);text-decoration:line-through">' + r.score + ' solved</td>'
+      : '<td class="lb-score">' + r.score + ' solved</td>';
+    return '<tr class="lb-row' + isMe + (r.disqualified ? ' lb-row-dq' : '') + '">' +
       '<td class="lb-rank">'  + medal + '</td>' +
-      '<td class="lb-name">'  + escHtml(r.name) + '</td>' +
-      '<td class="lb-score">' + r.score + ' solved</td>' +
+      '<td class="lb-name">'  + escHtml(r.name) + dqBadge + '</td>' +
+      scoreCell +
     '</tr>';
   }).join('');
 

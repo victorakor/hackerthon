@@ -139,11 +139,13 @@ type TournamentDetail struct {
 }
 
 // TournamentRank is one row in the post-tournament leaderboard.
+// TournamentRank is one row in the post-tournament leaderboard.
 type TournamentRank struct {
-	Rank   int    `json:"rank"`
-	UserID int    `json:"user_id"`
-	Name   string `json:"name"`
-	Score  int    `json:"score"` // number of questions passed
+	Rank         int    `json:"rank"`
+	UserID       int    `json:"user_id"`
+	Name         string `json:"name"`
+	Score        int    `json:"score"` // number of questions passed
+	Disqualified bool   `json:"disqualified"`
 }
 
 // ── Notification model ────────────────────────────────────────────────────────

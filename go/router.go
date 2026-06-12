@@ -83,6 +83,8 @@ func RegisterRoutes() {
 			HandleChallengeSubmit(w, r)
 		case strings.HasSuffix(path, "/result"):
 			HandleChallengeResult(w, r)
+		case strings.HasSuffix(path, "/violation"):
+			HandleChallengeViolation(w, r)
 		default:
 			HandleGetChallenge(w, r)
 		}
@@ -109,6 +111,8 @@ func RegisterRoutes() {
 			HandleTournamentSubmit(w, r)
 		case strings.HasSuffix(path, "/leaderboard"):
 			HandleTournamentLeaderboard(w, r)
+		case strings.HasSuffix(path, "/violation"):
+			HandleTournamentViolation(w, r)
 		default:
 			HandleGetTournament(w, r)
 		}

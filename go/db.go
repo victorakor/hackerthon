@@ -197,9 +197,19 @@ func createTables() error {
 	DB.Exec(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
 	DB.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_cases TEXT NOT NULL DEFAULT '[]'`)
 	DB.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_file TEXT NOT NULL DEFAULT ''`)
+	
 	// Challenge/tournament columns added in v2
 	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS challenger_score INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_score INTEGER NOT NULL DEFAULT 0`)
+
+	// Anti-cheat columns added in v3
+	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS violation_count INTEGER NOT NULL DEFAULT 0`)
+	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS disqualified BOOLEAN NOT NULL DEFAULT FALSE`)
+	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS disqualified_at TIMESTAMPTZ`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS challenger_violations INTEGER NOT NULL DEFAULT 0`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_violations INTEGER NOT NULL DEFAULT 0`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS challenger_disqualified BOOLEAN NOT NULL DEFAULT FALSE`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_disqualified BOOLEAN NOT NULL DEFAULT FALSE`)
 
 	if err := SeedAdminUser(); err != nil {
 		log.Printf("admin seed: %v", err)
@@ -322,14 +332,15 @@ func GetTournamentQuestions(tournamentID int) ([]int, error) {
 func GetTournamentLeaderboard(tournamentID int) ([]TournamentRank, error) {
 	rows, err := DB.Query(`
 		SELECT u.id, u.name,
-		       COUNT(ts.id) FILTER (WHERE ts.passed = TRUE) AS score
+		       COUNT(ts.id) FILTER (WHERE ts.passed = TRUE) AS score,
+		       COALESCE(tp.disqualified, FALSE) AS disqualified
 		FROM tournament_participants tp
 		JOIN users u ON u.id = tp.user_id
 		LEFT JOIN tournament_submissions ts
 		       ON ts.tournament_id = tp.tournament_id AND ts.user_id = tp.user_id
 		WHERE tp.tournament_id = $1
-		GROUP BY u.id, u.name
-		ORDER BY score DESC, u.name ASC`,
+		GROUP BY u.id, u.name, tp.disqualified
+		ORDER BY tp.disqualified ASC, score DESC, u.name ASC`,
 		tournamentID,
 	)
 	if err != nil {
@@ -340,7 +351,7 @@ func GetTournamentLeaderboard(tournamentID int) ([]TournamentRank, error) {
 	pos := 1
 	for rows.Next() {
 		var r TournamentRank
-		rows.Scan(&r.UserID, &r.Name, &r.Score)
+		rows.Scan(&r.UserID, &r.Name, &r.Score, &r.Disqualified)
 		r.Rank = pos
 		pos++
 		ranks = append(ranks, r)

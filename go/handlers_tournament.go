@@ -285,10 +285,20 @@ func HandleTournamentSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Reject submissions from disqualified participants
+	var disqualified bool
+	DB.QueryRow(`SELECT COALESCE(disqualified, FALSE) FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2`,
+		id, u.ID).Scan(&disqualified)
+	if disqualified {
+		http.Error(w, "you have been disqualified from this tournament", 403)
+		return
+	}
+
 	var body struct {
 		QuestionID int  `json:"question_id"`
 		Passed     bool `json:"passed"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.QuestionID == 0 {
 		http.Error(w, "question_id required", 400)
 		return
@@ -366,4 +376,76 @@ func HandleDeleteTournament(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
+}
+
+// POST /api/tournaments/{id}/violation
+// Body: { "type": "copy_paste" | "tab_switch" | "logout" }
+func HandleTournamentViolation(w http.ResponseWriter, r *http.Request) {
+	u := RequireAuth(w, r)
+	if u == nil {
+		return
+	}
+	id := parseIDFromPath(r.URL.Path, "/api/tournaments/", "/violation")
+	if id == 0 {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+
+	t, err := GetTournament(id)
+	if err != nil {
+		http.Error(w, "tournament not found", 404)
+		return
+	}
+	if t.Status != "active" {
+		http.Error(w, "tournament is not active", 409)
+		return
+	}
+
+	// Verify participant
+	var joined bool
+	DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2)`,
+		id, u.ID).Scan(&joined)
+	if !joined {
+		http.Error(w, "you are not a participant", 403)
+		return
+	}
+
+	var body struct {
+		Type string `json:"type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON", 400)
+		return
+	}
+
+	// Logout/close = immediate disqualification
+	if body.Type == "logout" {
+		DB.Exec(`UPDATE tournament_participants
+			SET disqualified=TRUE, disqualified_at=NOW()
+			WHERE tournament_id=$1 AND user_id=$2`, id, u.ID)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"disqualified": true, "violation_count": 2})
+		return
+	}
+
+	// Increment violation count; disqualify on 2nd
+	var newCount int
+	DB.QueryRow(`
+		UPDATE tournament_participants
+		SET violation_count = violation_count + 1
+		WHERE tournament_id=$1 AND user_id=$2
+		RETURNING violation_count`, id, u.ID).Scan(&newCount)
+
+	disqualified := newCount >= 2
+	if disqualified {
+		DB.Exec(`UPDATE tournament_participants
+			SET disqualified=TRUE, disqualified_at=NOW()
+			WHERE tournament_id=$1 AND user_id=$2`, id, u.ID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"violation_count": newCount,
+		"disqualified":    disqualified,
+	})
 }
