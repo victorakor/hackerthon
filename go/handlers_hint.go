@@ -127,7 +127,7 @@ Give a short hint pointing out what concept or approach they should reconsider. 
 
 	// Groq OpenAI-compatible API — llama3-8b-8192 is free, fast, no cold starts
 	reqBody, _ := json.Marshal(map[string]interface{}{
-		"model": "llama3-8b-8192",
+		"model": "llama-3.1-8b-instant",
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},
