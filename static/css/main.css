@@ -277,3 +277,19 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
   cursor: not-allowed;
   pointer-events: none;
 }
+/* ── AI HINT ── */
+.btn-ai-hint{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,0.05);position:relative}
+.btn-ai-hint:hover:not(:disabled){background:rgba(0,212,255,0.15)}
+.btn-ai-hint:disabled{opacity:.45;cursor:not-allowed}
+.ai-hint-badge{display:inline-block;margin-left:6px;font-family:var(--font-mono);font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;background:rgba(0,212,255,0.15);color:var(--accent);border:1px solid rgba(0,212,255,0.3);vertical-align:middle}
+.ai-hint-badge.warn{background:rgba(255,204,0,0.15);color:var(--warn);border-color:rgba(255,204,0,0.3)}
+.ai-hint-badge.exhausted{background:rgba(255,77,109,0.1);color:var(--hard);border-color:rgba(255,77,109,0.2)}
+.ai-hint-panel{margin-top:14px;padding:14px 18px;background:rgba(0,212,255,0.04);border:1px solid rgba(0,212,255,0.18);border-radius:8px;animation:slide-in .25s ease}
+.ai-hint-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.ai-hint-label{font-family:var(--font-mono);font-size:10px;color:var(--accent);letter-spacing:2px;text-transform:uppercase}
+.ai-hint-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0;line-height:1}
+.ai-hint-close:hover{color:var(--text)}
+.ai-hint-text{font-size:13px;color:var(--text);line-height:1.65;white-space:pre-wrap;word-break:break-word;min-height:20px}
+.ai-hint-loading{color:var(--muted);font-style:italic;font-size:12px;font-family:var(--font-mono)}
+.ai-hint-limit{color:var(--warn);font-size:12px;font-family:var(--font-mono)}
+.ai-hint-error{color:var(--hard);font-size:12px;font-family:var(--font-mono)}

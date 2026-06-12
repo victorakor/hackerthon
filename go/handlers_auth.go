@@ -98,6 +98,14 @@ func HandleLogout(w http.ResponseWriter, r *http.Request) {
 	auth := r.Header.Get("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
 		token := strings.TrimPrefix(auth, "Bearer ")
+
+		// Look up user before deleting the session so we can clear their hint counts
+		var userID int
+		DB.QueryRow(`SELECT user_id FROM sessions WHERE token=$1`, token).Scan(&userID)
+		if userID != 0 {
+			ResetHintCountsForUser(userID)
+		}
+
 		DB.Exec(`DELETE FROM sessions WHERE token=$1`, token)
 	}
 	w.WriteHeader(204)

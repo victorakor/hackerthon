@@ -51,6 +51,10 @@ func RegisterRoutes() {
 	// Code execution
 	http.HandleFunc("/api/run", WithCORS(HandleRunCode))
 
+	// AI Hints
+	http.HandleFunc("/api/hint", WithCORS(HandleHint))
+	http.HandleFunc("/api/hint/status", WithCORS(HandleHintStatus))
+
 	// Social
 	http.HandleFunc("/api/search", WithCORS(HandleSearch))
 	http.HandleFunc("/api/follows", WithCORS(HandleFollows))
@@ -66,7 +70,7 @@ func StartServer() {
 	srv := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 45 * time.Second,
+		WriteTimeout: 60 * time.Second, // longer for streaming hint responses
 	}
 	log.Fatal(srv.ListenAndServe())
 }

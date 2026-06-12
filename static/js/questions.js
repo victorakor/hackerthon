@@ -90,6 +90,10 @@ async function selectQuestion(id) {
         '</div>' +
         '<div class="detail-actions">' +
           '<button class="btn-action btn-hint" onclick="toggleHint()">&#x1F4A1; Hint</button>' +
+          // AI hint button — badge updated by hint.js after status check
+          '<button class="btn-action btn-ai-hint" id="ai-hint-btn" onclick="requestAiHint(' + id + ')">' +
+            '&#x1F916; AI Hint <span class="ai-hint-badge" id="ai-hint-badge">&#x231B;</span>' +
+          '</button>' +
           '<button class="btn-action btn-complete' + (isComplete ? ' done' : '') + '" id="complete-btn" onclick="toggleComplete(' + id + ')">' +
             (isComplete ? '&#x2713; Completed' : 'Mark Complete') +
           '</button>' +
@@ -108,6 +112,14 @@ async function selectQuestion(id) {
           '<div class="hint-text">' + escHtml(q.hint_text) + ' &mdash; ' +
             '<a class="hint-link" href="' + escHtml(q.hint_url) + '" target="_blank" rel="noopener">Open docs &#x2197;</a>' +
           '</div>' +
+        '</div>' +
+        // AI hint output panel (hidden until first hint is requested)
+        '<div class="ai-hint-panel" id="ai-hint-panel" style="display:none">' +
+          '<div class="ai-hint-header">' +
+            '<span class="ai-hint-label">&#x1F916; AI Nudge</span>' +
+            '<button class="ai-hint-close" onclick="document.getElementById(\'ai-hint-panel\').style.display=\'none\'">&#x2715;</button>' +
+          '</div>' +
+          '<div class="ai-hint-text" id="ai-hint-text"></div>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -158,7 +170,9 @@ async function selectQuestion(id) {
   // Boot the CodeMirror editor now that the DOM is ready
   initCodeEditor();
 
+  // Load submissions and hint status in parallel
   loadSubmissions(id);
+  initHintStatus(id);
 }
 
 function toggleHint() {
