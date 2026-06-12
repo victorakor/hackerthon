@@ -6,4 +6,6 @@ function switchTab(name) {
   if (name === 'leaderboard') loadLeaderboard();
   if (name === 'notifications') loadNotifications();
   if (name === 'admin') loadAdminPanel();
+  if (name === 'challenges') initChallengesTab();
+  if (name === 'tournaments') initTournamentsTab();
 }

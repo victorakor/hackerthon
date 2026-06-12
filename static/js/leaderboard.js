@@ -15,7 +15,9 @@ async function loadLeaderboard() {
         '<td>' + (c.user_id && c.user_id !== currentUser.id ?
           '<button class="follow-btn ' + (followingIds.has(c.user_id) ? 'following' : '') + '" id="fb-' + c.user_id + '" onclick="toggleFollow(' + c.user_id + ',this)">' +
             (followingIds.has(c.user_id) ? '&#x2713; Following' : '+ Follow') +
-          '</button>' : '\u2014') +
+          '</button> ' +
+          '<button class="btn btn-sm" style="margin-left:4px" onclick="openChallengeModal(' + c.user_id + ',\'' + escHtml(c.author_name).replace(/'/g,"&#39;") + '\')">⚔️</button>'
+          : '\u2014') +
         '</td>' +
       '</tr>';
     }).join('');

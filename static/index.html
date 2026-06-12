@@ -90,6 +90,8 @@
     <button class="nav-tab active" data-tab="questions" onclick="switchTab('questions')">Questions</button>
     <button class="nav-tab" data-tab="leaderboard" onclick="switchTab('leaderboard')">Leaderboard</button>
     <button class="nav-tab" data-tab="search" onclick="switchTab('search')">Search Users</button>
+    <button class="nav-tab" data-tab="challenges" onclick="switchTab('challenges')">⚔️ Challenges<span id="notif-badge" style="display:none;background:var(--accent);color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;margin-left:4px">!</span></button>
+    <button class="nav-tab" data-tab="tournaments" onclick="switchTab('tournaments')">🏆 Tournaments</button>
     <button class="nav-tab" data-tab="notifications" onclick="switchTab('notifications')">Notifications<span class="notif-dot" id="notif-dot" style="display:none"></span></button>
     <button class="nav-tab" data-tab="admin" id="admin-tab" style="display:none" onclick="switchTab('admin')">Admin Panel</button>
   </nav>
@@ -160,6 +162,23 @@
     </div>
   </div>
 
+  <!-- CONTEST COUNTDOWN BAR -->
+  <div id="contest-countdown" class="contest-countdown" style="display:none"></div>
+
+  <!-- CHALLENGES TAB -->
+  <div id="tab-challenges" style="display:none">
+    <div class="admin-page">
+      <div id="challenge-list"><p class="loading-text">Loading challenges…</p></div>
+    </div>
+  </div>
+
+  <!-- TOURNAMENTS TAB -->
+  <div id="tab-tournaments" style="display:none">
+    <div class="admin-page">
+      <div id="tournament-list"><p class="loading-text">Loading tournaments…</p></div>
+    </div>
+  </div>
+
   <!-- ADMIN TAB -->
   <div id="tab-admin" style="display:none">
     <div class="admin-page">
@@ -170,6 +189,15 @@
       <div class="admin-section">
         <div class="admin-section-title">Questions — Visibility</div>
         <div class="admin-list" id="admin-q-list"></div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-section-title">Challenges — Assign Questions</div>
+        <div class="admin-list" id="admin-challenges-list"></div>
+      </div>
+      <div class="admin-section">
+        <div class="admin-section-title">Tournaments</div>
+        <button class="btn-send" style="margin-bottom:12px" onclick="openCreateTournamentModal()">+ Create Tournament</button>
+        <div class="admin-list" id="admin-tournaments-list"></div>
       </div>
       <div class="admin-section admin-full">
         <div class="admin-section-title">Add New Question</div>
@@ -211,6 +239,7 @@
 </div><!-- /#main-app -->
 
 <!-- JS -->
+<script src="/js/utils.js"></script>
 <script src="/js/state.js"></script>
 <script src="/js/api.js"></script>
 <script src="/js/auth.js"></script>
@@ -226,7 +255,9 @@
 <script src="/js/leaderboard.js"></script>
 <script src="/js/social.js"></script>
 <script src="/js/admin.js"></script>
+<script src="/js/contest_timer.js"></script>
+<script src="/js/challenges.js"></script>
+<script src="/js/tournaments.js"></script>
 <script src="/js/tabs.js"></script>
-<script src="/js/utils.js"></script>
 </body>
 </html>

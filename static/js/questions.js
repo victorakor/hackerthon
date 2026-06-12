@@ -194,3 +194,55 @@ function toggleComplete(id) {
 function saveCompleted() {
   localStorage.setItem('completed_' + currentUser.id, JSON.stringify(Array.from(completedIds)));
 }
+// ── Contest mode ──────────────────────────────────────────────────────────────
+// When a challenge or tournament is active, lock the question list to contest
+// questions only and show the countdown timer.
+
+var _contestMode = false;
+var _contestQuestionIDs = [];
+var _activeContestType = null;  // 'challenge' | 'tournament'
+var _activeContestID = null;
+
+function enterContestMode(type, id, questionIDs, scheduledAt) {
+  _contestMode = true;
+  _contestQuestionIDs = questionIDs || [];
+  _activeContestType = type;
+  _activeContestID = id;
+
+  // Filter the visible questions to only contest questions
+  var allCards = document.querySelectorAll('.question-card');
+  allCards.forEach(function(card) {
+    var qid = parseInt(card.dataset.id);
+    card.style.display = (_contestQuestionIDs.indexOf(qid) !== -1) ? '' : 'none';
+  });
+
+  // Add a contest banner above the question list
+  var banner = document.getElementById('contest-mode-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'contest-mode-banner';
+    banner.className = 'contest-banner';
+    var ql = document.getElementById('question-list') || document.querySelector('.question-list');
+    if (ql && ql.parentNode) ql.parentNode.insertBefore(banner, ql);
+  }
+  banner.innerHTML = '⚔️ <strong>' + (type === 'challenge' ? 'Challenge' : 'Tournament') +
+    ' #' + id + ' in progress</strong> — solve the questions below before time runs out!';
+  banner.style.display = '';
+
+  // Wire the countdown
+  ContestTimer.resume(type, id, scheduledAt, questionIDs, {
+    onEnd: function() { exitContestMode(); }
+  });
+}
+
+function exitContestMode() {
+  _contestMode = false;
+  _contestQuestionIDs = [];
+  _activeContestType = null;
+  _activeContestID = null;
+  // Show all question cards again
+  document.querySelectorAll('.question-card').forEach(function(c) { c.style.display = ''; });
+  var banner = document.getElementById('contest-mode-banner');
+  if (banner) banner.style.display = 'none';
+  ContestTimer.clear();
+}

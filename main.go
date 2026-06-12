@@ -11,5 +11,6 @@ func main() {
 	}
 	defer app.DB.Close()
 	app.RegisterRoutes()
+	app.StartContestEngine()
 	app.StartServer()
 }

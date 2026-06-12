@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -55,10 +56,72 @@ func RegisterRoutes() {
 	http.HandleFunc("/api/hint", WithCORS(HandleHint))
 	http.HandleFunc("/api/hint/status", WithCORS(HandleHintStatus))
 
-	// Social
+	// Social — feed notifications (follows-based)
 	http.HandleFunc("/api/search", WithCORS(HandleSearch))
 	http.HandleFunc("/api/follows", WithCORS(HandleFollows))
 	http.HandleFunc("/api/notifications", WithCORS(HandleNotifications))
+
+	// Contest notifications (challenge/tournament system) — separate endpoint
+	http.HandleFunc("/api/contest-notifications", WithCORS(HandleNotifications2))
+
+	// ── Challenges ────────────────────────────────────────────────────────────
+	http.HandleFunc("/api/challenges", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			HandleCreateChallenge(w, r)
+		} else {
+			HandleListChallenges(w, r)
+		}
+	}))
+	http.HandleFunc("/api/challenges/", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/accept"):
+			HandleAcceptChallenge(w, r)
+		case strings.HasSuffix(path, "/reject"):
+			HandleRejectChallenge(w, r)
+		case strings.HasSuffix(path, "/submit"):
+			HandleChallengeSubmit(w, r)
+		case strings.HasSuffix(path, "/result"):
+			HandleChallengeResult(w, r)
+		default:
+			HandleGetChallenge(w, r)
+		}
+	}))
+	http.HandleFunc("/api/admin/challenges", WithCORS(HandleAdminListChallenges))
+	http.HandleFunc("/api/admin/challenges/", WithCORS(HandleAssignChallengeQuestions))
+
+	// ── Tournaments ───────────────────────────────────────────────────────────
+	http.HandleFunc("/api/tournaments", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			HandleCreateTournament(w, r)
+		} else {
+			HandleListTournaments(w, r)
+		}
+	}))
+	http.HandleFunc("/api/tournaments/", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/join"):
+			HandleJoinTournament(w, r)
+		case strings.HasSuffix(path, "/leave"):
+			HandleLeaveTournament(w, r)
+		case strings.HasSuffix(path, "/submit"):
+			HandleTournamentSubmit(w, r)
+		case strings.HasSuffix(path, "/leaderboard"):
+			HandleTournamentLeaderboard(w, r)
+		default:
+			HandleGetTournament(w, r)
+		}
+	}))
+	http.HandleFunc("/api/admin/tournaments/", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			HandleDeleteTournament(w, r)
+		} else {
+			HandleAssignTournamentQuestions(w, r)
+		}
+	}))
+
+	log.Println("✓ Routes registered")
 }
 
 func StartServer() {
@@ -70,7 +133,7 @@ func StartServer() {
 	srv := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second, // longer for streaming hint responses
+		WriteTimeout: 60 * time.Second,
 	}
 	log.Fatal(srv.ListenAndServe())
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -214,4 +215,32 @@ func HandleNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(notifs)
+}
+
+// GET /api/notifications?since=0
+func HandleNotifications2(w http.ResponseWriter, r *http.Request) {
+	u := RequireAuth(w, r)
+	if u == nil {
+		return
+	}
+	var since int
+	fmt.Sscanf(r.URL.Query().Get("since"), "%d", &since)
+	rows, _ := DB.Query(
+		`SELECT id, user_id, kind, payload, read, created_at
+         FROM notifications WHERE user_id=$1 AND id > $2
+         ORDER BY id ASC LIMIT 50`, u.ID, since)
+	defer rows.Close()
+	var out []Notification
+	for rows.Next() {
+		var n Notification
+		rows.Scan(&n.ID, &n.UserID, &n.Kind, &n.Payload, &n.Read, &n.CreatedAt)
+		out = append(out, n)
+	}
+	if out == nil {
+		out = []Notification{}
+	}
+	// Mark as read
+	DB.Exec(`UPDATE notifications SET read=TRUE WHERE user_id=$1 AND id > $2`, u.ID, since)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(out)
 }

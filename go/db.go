@@ -33,6 +33,7 @@ func InitDB() error {
 }
 
 func createTables() error {
+	// ── Core tables ───────────────────────────────────────────────────────────
 	_, err := DB.Exec(`
 		CREATE TABLE IF NOT EXISTS users (
 			id            SERIAL PRIMARY KEY,
@@ -91,15 +92,114 @@ func createTables() error {
 		);
 	`)
 	if err != nil {
-		return fmt.Errorf("creating tables: %w", err)
+		return fmt.Errorf("creating core tables: %w", err)
 	}
 
-	// Migrations for existing DBs
+	// ── Challenge tables ──────────────────────────────────────────────────────
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS challenges (
+			id             SERIAL PRIMARY KEY,
+			challenger_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			opponent_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			scheduled_at   TIMESTAMPTZ NOT NULL,
+			status         TEXT NOT NULL DEFAULT 'pending',
+			winner_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+			challenger_score INTEGER NOT NULL DEFAULT 0,
+			opponent_score   INTEGER NOT NULL DEFAULT 0,
+			created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			CONSTRAINT challenges_status_check
+				CHECK (status IN ('pending','accepted','rejected','active','completed','cancelled'))
+		);
+
+		CREATE TABLE IF NOT EXISTS challenge_questions (
+			challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+			question_id  INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+			sort_order   INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (challenge_id, question_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS challenge_submissions (
+			id           SERIAL PRIMARY KEY,
+			challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+			user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			question_id  INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+			passed       BOOLEAN NOT NULL DEFAULT FALSE,
+			submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (challenge_id, user_id, question_id)
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("creating challenge tables: %w", err)
+	}
+
+	// ── Tournament tables ─────────────────────────────────────────────────────
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS tournaments (
+			id               SERIAL PRIMARY KEY,
+			title            TEXT NOT NULL,
+			description      TEXT NOT NULL DEFAULT '',
+			created_by       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			scheduled_at     TIMESTAMPTZ NOT NULL,
+			max_participants INTEGER NOT NULL DEFAULT 10,
+			status           TEXT NOT NULL DEFAULT 'upcoming',
+			created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			CONSTRAINT tournaments_status_check
+				CHECK (status IN ('upcoming','active','completed'))
+		);
+
+		CREATE TABLE IF NOT EXISTS tournament_questions (
+			tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+			question_id   INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+			sort_order    INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (tournament_id, question_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS tournament_participants (
+			tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+			user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			joined_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (tournament_id, user_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS tournament_submissions (
+			id            SERIAL PRIMARY KEY,
+			tournament_id INTEGER NOT NULL REFERENCES tournaments(id) ON DELETE CASCADE,
+			user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			question_id   INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+			passed        BOOLEAN NOT NULL DEFAULT FALSE,
+			submitted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (tournament_id, user_id, question_id)
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("creating tournament tables: %w", err)
+	}
+
+	// ── Notifications table ───────────────────────────────────────────────────
+	// Used to push challenge invites and contest-start events to users.
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS notifications (
+			id         SERIAL PRIMARY KEY,
+			user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			kind       TEXT NOT NULL,
+			payload    TEXT NOT NULL DEFAULT '{}',
+			read       BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("creating notifications table: %w", err)
+	}
+
+	// ── Migrations for existing DBs ───────────────────────────────────────────
 	DB.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS visible BOOLEAN NOT NULL DEFAULT FALSE`)
 	DB.Exec(`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
 	DB.Exec(`ALTER TABLE reviews ADD COLUMN IF NOT EXISTS user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`)
 	DB.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_cases TEXT NOT NULL DEFAULT '[]'`)
 	DB.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS test_file TEXT NOT NULL DEFAULT ''`)
+	// Challenge/tournament columns added in v2
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS challenger_score INTEGER NOT NULL DEFAULT 0`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_score INTEGER NOT NULL DEFAULT 0`)
 
 	if err := SeedAdminUser(); err != nil {
 		log.Printf("admin seed: %v", err)
@@ -112,6 +212,173 @@ func createTables() error {
 	}
 	return nil
 }
+
+// ── Notification helpers ──────────────────────────────────────────────────────
+
+// CreateNotification inserts a notification row and returns its id.
+func CreateNotification(userID int, kind, payload string) (int, error) {
+	var id int
+	err := DB.QueryRow(
+		`INSERT INTO notifications (user_id, kind, payload) VALUES ($1,$2,$3) RETURNING id`,
+		userID, kind, payload,
+	).Scan(&id)
+	return id, err
+}
+
+// ── Challenge DB helpers ──────────────────────────────────────────────────────
+
+// GetChallenge fetches a single challenge by id.
+func GetChallenge(id int) (*Challenge, error) {
+	c := &Challenge{}
+	err := DB.QueryRow(`
+		SELECT id, challenger_id, opponent_id, scheduled_at, status,
+		       COALESCE(winner_id, 0), challenger_score, opponent_score, created_at
+		FROM challenges WHERE id = $1`, id,
+	).Scan(&c.ID, &c.ChallengerID, &c.OpponentID, &c.ScheduledAt, &c.Status,
+		&c.WinnerID, &c.ChallengerScore, &c.OpponentScore, &c.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// GetChallengeQuestions returns the ordered question IDs for a challenge.
+func GetChallengeQuestions(challengeID int) ([]int, error) {
+	rows, err := DB.Query(
+		`SELECT question_id FROM challenge_questions WHERE challenge_id=$1 ORDER BY sort_order`,
+		challengeID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// CountChallengeScore counts how many questions a user passed in a challenge.
+func CountChallengeScore(challengeID, userID int) (int, error) {
+	var n int
+	err := DB.QueryRow(
+		`SELECT COUNT(*) FROM challenge_submissions
+		 WHERE challenge_id=$1 AND user_id=$2 AND passed=TRUE`,
+		challengeID, userID,
+	).Scan(&n)
+	return n, err
+}
+
+// ── Tournament DB helpers ─────────────────────────────────────────────────────
+
+// GetTournament fetches a single tournament by id.
+func GetTournament(id int) (*Tournament, error) {
+	t := &Tournament{}
+	err := DB.QueryRow(`
+		SELECT id, title, description, created_by, scheduled_at,
+		       max_participants, status, created_at
+		FROM tournaments WHERE id = $1`, id,
+	).Scan(&t.ID, &t.Title, &t.Description, &t.CreatedBy,
+		&t.ScheduledAt, &t.MaxParticipants, &t.Status, &t.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+// GetTournamentParticipantCount returns the current number of joined participants.
+func GetTournamentParticipantCount(tournamentID int) (int, error) {
+	var n int
+	err := DB.QueryRow(
+		`SELECT COUNT(*) FROM tournament_participants WHERE tournament_id=$1`,
+		tournamentID,
+	).Scan(&n)
+	return n, err
+}
+
+// GetTournamentQuestions returns the ordered question IDs for a tournament.
+func GetTournamentQuestions(tournamentID int) ([]int, error) {
+	rows, err := DB.Query(
+		`SELECT question_id FROM tournament_questions WHERE tournament_id=$1 ORDER BY sort_order`,
+		tournamentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// GetTournamentLeaderboard returns participants ranked by questions passed.
+func GetTournamentLeaderboard(tournamentID int) ([]TournamentRank, error) {
+	rows, err := DB.Query(`
+		SELECT u.id, u.name,
+		       COUNT(ts.id) FILTER (WHERE ts.passed = TRUE) AS score
+		FROM tournament_participants tp
+		JOIN users u ON u.id = tp.user_id
+		LEFT JOIN tournament_submissions ts
+		       ON ts.tournament_id = tp.tournament_id AND ts.user_id = tp.user_id
+		WHERE tp.tournament_id = $1
+		GROUP BY u.id, u.name
+		ORDER BY score DESC, u.name ASC`,
+		tournamentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ranks []TournamentRank
+	pos := 1
+	for rows.Next() {
+		var r TournamentRank
+		rows.Scan(&r.UserID, &r.Name, &r.Score)
+		r.Rank = pos
+		pos++
+		ranks = append(ranks, r)
+	}
+	return ranks, nil
+}
+
+// GetChallengeLeaderboard returns both participants' scores for a challenge.
+func GetChallengeResult(challengeID int) (*ChallengeResult, error) {
+	c, err := GetChallenge(challengeID)
+	if err != nil {
+		return nil, err
+	}
+
+	var challengerName, opponentName string
+	DB.QueryRow(`SELECT name FROM users WHERE id=$1`, c.ChallengerID).Scan(&challengerName)
+	DB.QueryRow(`SELECT name FROM users WHERE id=$1`, c.OpponentID).Scan(&opponentName)
+
+	var winnerName string
+	if c.WinnerID != 0 {
+		DB.QueryRow(`SELECT name FROM users WHERE id=$1`, c.WinnerID).Scan(&winnerName)
+	}
+
+	return &ChallengeResult{
+		ChallengeID:     c.ID,
+		Status:          c.Status,
+		ChallengerID:    c.ChallengerID,
+		ChallengerName:  challengerName,
+		ChallengerScore: c.ChallengerScore,
+		OpponentID:      c.OpponentID,
+		OpponentName:    opponentName,
+		OpponentScore:   c.OpponentScore,
+		WinnerID:        c.WinnerID,
+		WinnerName:      winnerName,
+	}, nil
+}
+
+// ── Seed functions ────────────────────────────────────────────────────────────
 
 func SeedAdminUser() error {
 	var exists bool

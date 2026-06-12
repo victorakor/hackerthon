@@ -32,4 +32,8 @@ async function enterApp() {
   await loadQuestions();
   checkNotifications();
   startTimer();
+  startNotificationPolling();
+  // Resume any active contest if page was refreshed mid-contest
+  checkForActiveChallenge();
+  checkForActiveTournament();
 }

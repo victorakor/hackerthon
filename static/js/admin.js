@@ -43,6 +43,7 @@ async function loadAdminPanel() {
         '</div>' +
       '</div>';
     }).join('');
+    loadAdminContestSections();
   } catch(e) {}
 }
 
@@ -184,4 +185,33 @@ async function adminAddQuestion() {
       loadAdminPanel();
     } else { showToast(await res.text(), 'error'); }
   } catch(e) { showToast('Error adding question', 'error'); }
+}
+
+// Called at end of loadAdminPanel — load pending challenges and tournaments
+async function loadAdminContestSections() {
+  // Challenges needing question assignment
+  loadAdminChallenges();
+
+  // Tournament list with assign-questions buttons
+  var container = document.getElementById('admin-tournaments-list');
+  if (!container) return;
+  try {
+    var res = await apiFetch('/api/tournaments');
+    if (!res.ok) return;
+    var tournaments = await res.json();
+    if (!tournaments || tournaments.length === 0) {
+      container.innerHTML = '<p class="empty-text">No tournaments yet.</p>';
+      return;
+    }
+    container.innerHTML = tournaments.map(function(t) {
+      return '<div class="admin-item">' +
+        '<span>' + escHtml(t.title) + '</span>' +
+        '<span class="status-badge status-' + t.status + '">' + t.status + '</span>' +
+        '<span>' + new Date(t.scheduled_at).toLocaleString() + '</span>' +
+        '<span>' + t.participant_count + '/' + t.max_participants + '</span>' +
+        (t.status === 'upcoming' ?
+          '<button class="btn btn-sm btn-primary" onclick="openAssignQuestionsModal(\'tournament\',' + t.id + ')">Assign Questions</button>' : '') +
+      '</div>';
+    }).join('');
+  } catch(e) {}
 }

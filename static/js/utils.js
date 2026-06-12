@@ -18,10 +18,9 @@ function timeAgo(dateStr) {
 }
 
 function showToast(msg, type) {
-  type = type || 'success';
-  var t = document.createElement('div');
-  t.className = 'toast ' + type;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 3200);
+  var el = document.createElement('div');
+  el.className = 'toast toast-' + (type || 'success');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function() { el.remove(); }, 4000);
 }
