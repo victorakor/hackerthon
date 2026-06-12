@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ─── In-memory hint counter ───────────────────────────────────────────────────
@@ -88,8 +89,8 @@ func HandleHint(w http.ResponseWriter, r *http.Request) {
 	remaining := maxHintsPerQuestion - (used + 1)
 	hintMu.Unlock()
 
-	// ── Build HuggingFace request ────────────────────────────────────────────
-	apiKey := os.Getenv("HF_API_KEY")
+	// ── Build Groq request ───────────────────────────────────────────────────
+	apiKey := os.Getenv("GROQ_API_KEY")
 	if apiKey == "" {
 		http.Error(w, "AI hints are not configured on this server", 503)
 		return
@@ -109,8 +110,7 @@ func HandleHint(w http.ResponseWriter, r *http.Request) {
 		code = "(no code written yet)"
 	}
 
-	// Instruct format that Mistral-7B-Instruct understands
-	prompt := fmt.Sprintf(`<s>[INST] You are a patient coding mentor. Give the student ONE short nudge (2-4 sentences) in the right direction — never write any code for them.
+	prompt := fmt.Sprintf(`You are a patient coding mentor. Give the student ONE short nudge (2-4 sentences) in the right direction — never write any code for them.
 
 Challenge: %s
 Description: %s
@@ -118,27 +118,26 @@ Description: %s
 Student's current %s code:
 %s
 
-Give a short hint pointing out what concept or approach they should reconsider. Do NOT write any code. Do NOT solve it for them. Be encouraging. [/INST]`,
+Give a short hint pointing out what concept or approach they should reconsider. Do NOT write any code. Do NOT solve it for them. Be encouraging.`,
 		body.QuestionTitle,
 		body.QuestionDescription,
 		lang,
 		code,
 	)
 
-	// Free HuggingFace Inference API — Mistral-7B-Instruct-v0.3
-	model := "HuggingFaceH4/zephyr-7b-beta"
-	hfURL := fmt.Sprintf("https://api-inference.huggingface.co/models/%s", model)
-
+	// Groq OpenAI-compatible API — llama3-8b-8192 is free, fast, no cold starts
 	reqBody, _ := json.Marshal(map[string]interface{}{
-		"inputs": prompt,
-		"parameters": map[string]interface{}{
-			"max_new_tokens":   180,
-			"temperature":      0.5,
-			"return_full_text": false,
+		"model": "llama3-8b-8192",
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
 		},
+		"max_tokens":  180,
+		"temperature": 0.5,
 	})
 
-	req, err := http.NewRequestWithContext(r.Context(), "POST", hfURL, bytes.NewReader(reqBody))
+	req, err := http.NewRequestWithContext(r.Context(), "POST",
+		"https://api.groq.com/openai/v1/chat/completions",
+		bytes.NewReader(reqBody))
 	if err != nil {
 		http.Error(w, "failed to build AI request", 500)
 		return
@@ -146,10 +145,10 @@ Give a short hint pointing out what concept or approach they should reconsider. 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 20 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		http.Error(w, "AI service unreachable", 502)
+		http.Error(w, fmt.Sprintf("AI service unreachable: %v", err), 502)
 		return
 	}
 	defer resp.Body.Close()
@@ -161,20 +160,25 @@ Give a short hint pointing out what concept or approach they should reconsider. 
 	}
 
 	if resp.StatusCode != 200 {
-		http.Error(w, fmt.Sprintf("AI service error: %s", string(respBytes)), 502)
+		http.Error(w, fmt.Sprintf("AI service error (%d): %s", resp.StatusCode, string(respBytes)), 502)
 		return
 	}
 
-	// HF returns: [{"generated_text": "..."}]
-	var hfResp []struct {
-		GeneratedText string `json:"generated_text"`
+	// Groq returns OpenAI-compatible format:
+	// {"choices": [{"message": {"content": "..."}}]}
+	var groqResp struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
 	}
-	if err := json.Unmarshal(respBytes, &hfResp); err != nil || len(hfResp) == 0 {
-		http.Error(w, "unexpected AI response format", 502)
+	if err := json.Unmarshal(respBytes, &groqResp); err != nil || len(groqResp.Choices) == 0 {
+		http.Error(w, fmt.Sprintf("unexpected AI response format: %s", string(respBytes)), 502)
 		return
 	}
 
-	hintText := strings.TrimSpace(hfResp[0].GeneratedText)
+	hintText := strings.TrimSpace(groqResp.Choices[0].Message.Content)
 
 	// Strip any accidental code blocks the model might produce
 	if idx := strings.Index(hintText, "```"); idx != -1 {
@@ -182,8 +186,7 @@ Give a short hint pointing out what concept or approach they should reconsider. 
 	}
 
 	// ── Respond as SSE ───────────────────────────────────────────────────────
-	// HF free tier doesn't stream, so we simulate word-by-word from the full
-	// response so the UI still feels progressive.
+	// Simulate word-by-word streaming from the full response for a progressive UI feel.
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
