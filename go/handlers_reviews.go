@@ -45,6 +45,24 @@ func HandleReviews(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "submission_id and rating(1-5) required", 400)
 			return
 		}
+		if rv.Comment == "" {
+			http.Error(w, "comment is required", 400)
+			return
+		}
+		// Prevent reviewing your own submission
+		var submissionOwner int
+		DB.QueryRow(`SELECT user_id FROM submissions WHERE id=$1`, rv.SubmissionID).Scan(&submissionOwner)
+		if submissionOwner == u.ID {
+			http.Error(w, "You cannot review your own submission", 403)
+			return
+		}
+		// Enforce one review per user per submission
+		var existing int
+		DB.QueryRow(`SELECT COUNT(*) FROM reviews WHERE submission_id=$1 AND user_id=$2`, rv.SubmissionID, u.ID).Scan(&existing)
+		if existing > 0 {
+			http.Error(w, "You have already reviewed this submission", 409)
+			return
+		}
 		rv.ReviewerName = u.Name
 		rv.UserID = u.ID
 		err := DB.QueryRow(`INSERT INTO reviews (submission_id,user_id,reviewer_name,rating,comment) VALUES ($1,$2,$3,$4,$5) RETURNING id,created_at`,

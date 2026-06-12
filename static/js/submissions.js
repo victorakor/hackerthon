@@ -22,16 +22,20 @@ async function loadSubmissions(qid) {
         '<div class="sub-body" id="sub-body-' + s.id + '">' +
           '<pre class="code-block">' + escHtml(s.code) + '</pre>' +
           (s.notes ? '<div class="sub-notes">&#x1F4AC; ' + escHtml(s.notes) + '</div>' : '') +
-          '<div class="review-form">' +
-            '<div class="form-label">Rate this solution</div>' +
-            '<div class="stars-input" id="stars-' + s.id + '">' +
-              [1,2,3,4,5].map(function(n) {
-                return '<button class="star-btn" onclick="setStar(' + s.id + ',' + n + ')">&#x2606;</button>';
-              }).join('') +
-            '</div>' +
-            '<input class="form-input" id="comment-' + s.id + '" placeholder="Leave a comment\u2026" style="font-size:12px"/>' +
-            '<div><button class="btn-send" onclick="submitReview(' + s.id + ')">Post Review</button></div>' +
-          '</div>' +
+          (function() {
+            var isOwn = currentUser && s.user_id && s.user_id === currentUser.id;
+            if (isOwn) return '';
+            return '<div id="review-form-' + s.id + '" class="review-form">' +
+              '<div class="form-label">Rate this solution</div>' +
+              '<div class="stars-input" id="stars-' + s.id + '">' +
+                [1,2,3,4,5].map(function(n) {
+                  return '<button class="star-btn" onclick="setStar(' + s.id + ',' + n + ')">&#x2606;</button>';
+                }).join('') +
+              '</div>' +
+              '<input class="form-input" id="comment-' + s.id + '" placeholder="Leave a comment (required)\u2026" style="font-size:12px"/>' +
+              '<div><button class="btn-send" onclick="submitReview(' + s.id + ')">Post Review</button></div>' +
+            '</div>';
+          })() +
           '<div class="reviews-list" id="reviews-' + s.id + '">' +
             '<div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">Loading reviews\u2026</div>' +
           '</div>' +
