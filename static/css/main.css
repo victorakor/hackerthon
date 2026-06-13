@@ -1173,3 +1173,11 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
   background: rgba(var(--accent-rgb, 90, 130, 255), 0.15);
   border: 1px solid var(--accent);
 }
+
+.clan-page {
+  padding: 24px 0;
+}
+
+.clan-browser {
+  max-width: 860px;
+}

@@ -10,9 +10,13 @@ function renderClanTab() {
 
   // Check if user is in a clan first
   apiFetch('/api/clans/mine')
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok) { renderClanBrowser(); return null; }
+      return r.json();
+    })
     .then(function(myClan) {
-      if (myClan && myClan.id) {
+      if (!myClan) return;
+      if (myClan.id) {
         renderMyClanView(myClan);
       } else {
         renderClanBrowser();
@@ -20,7 +24,7 @@ function renderClanTab() {
     })
     .catch(function() {
       renderClanBrowser();
-    });
+  });
 }
 
 // ── Clan Browser (user not in a clan) ────────────────────────────────────────
