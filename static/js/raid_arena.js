@@ -16,6 +16,13 @@ async function initRaidArena(raidID) {
     var res = await apiFetch('/api/raids/' + raidID + '/enter', { method: 'POST' });
     var data = await res.json();
     if (!res.ok) {
+      // If user is disqualified or finished, show results view instead
+      if (res.status === 403 &&
+          (data.error === 'you have been disqualified from this raid' ||
+           data.error === 'you have already finished this raid')) {
+        _renderRaidResultsView(raidID, data.error);
+        return;
+      }
       showToast((data && data.error) || 'Could not enter raid arena.', 'error');
       return;
     }
@@ -306,6 +313,25 @@ async function _raidArenaSubmit(qid) {
       if (badges && !badges.querySelector('.badge-solved')) {
         badges.insertAdjacentHTML('beforeend', '<span class="badge badge-solved">✓ Solved</span>');
       }
+
+      // If all questions are solved, mark the user as finished and show results
+      if (_raidSolvedIds.size >= _raidQuestions.length) {
+        if (typeof AntiCheat !== 'undefined') AntiCheat.stop();
+        try {
+          await apiFetch('/api/raids/' + _raidArenaId + '/finish', { method: 'POST' });
+        } catch(e) {}
+        showToast('🎉 You solved all questions! Waiting for raid to end…', 'success');
+        var finishedRaidId = _raidArenaId;
+        if (_raidCountdownHandle) clearInterval(_raidCountdownHandle);
+        if (_raidScorePollHandle) clearInterval(_raidScorePollHandle);
+        _raidArenaId = null;
+        _raidQuestions = [];
+        _raidCurrentQ = null;
+        setTimeout(function() {
+          _renderRaidResultsView(finishedRaidId, 'you have already finished this raid');
+        }, 1500);
+        return;
+      }
     } else {
       showToast('Tests did not all pass. Keep trying!', 'error');
     }
@@ -341,4 +367,60 @@ function _raidArenaExit() {
       renderClanTab();
     }
   );
+}
+
+// Called when user is disqualified or has finished — shows a locked results view
+async function _renderRaidResultsView(raidID, reason) {
+  var container = document.getElementById('clan-view');
+  if (!container) return;
+
+  // Fetch current scores to display
+  var scores = [];
+  try {
+    var r = await apiFetch('/api/raids/' + raidID + '/leaderboard');
+    scores = await r.json();
+  } catch(e) {}
+
+  var isDisq = reason && reason.indexOf('disqualified') !== -1;
+  var headline = isDisq
+    ? '🚫 You have been disqualified from this raid.'
+    : '✅ You have finished this raid.';
+  var subtitle = 'The raid is still in progress. Final results will be available when it ends.';
+
+  var scoreRows = (scores || []).map(function(s) {
+    return '<div class="raid-scoreboard-row">' +
+      '<span class="raid-clan-rank">#' + s.rank + '</span>' +
+      '<span class="raid-clan-name">' + escHtml(s.clan_name) + '</span>' +
+      '<span class="raid-clan-score">' + s.score + ' pts</span>' +
+    '</div>';
+  }).join('');
+
+  container.innerHTML =
+    '<div class="arena-panel raid-arena-panel" style="text-align:center;padding:40px 20px">' +
+      '<div style="font-size:2rem;margin-bottom:12px">' + headline + '</div>' +
+      '<div style="color:var(--muted);margin-bottom:32px">' + subtitle + '</div>' +
+      '<div class="raid-scoreboard" style="max-width:400px;margin:0 auto 32px">' +
+        '<div class="raid-scoreboard-title">🏆 Current Clan Scores</div>' +
+        '<div class="raid-scoreboard-rows" id="raid-results-scores">' + scoreRows + '</div>' +
+      '</div>' +
+      '<button class="btn btn-ghost" onclick="renderClanTab()">← Back to Raids</button>' +
+    '</div>';
+
+  // Keep polling scores so they see live updates even from the waiting room
+  if (_raidScorePollHandle) clearInterval(_raidScorePollHandle);
+  _raidScorePollHandle = setInterval(function() {
+    apiFetch('/api/raids/' + raidID + '/leaderboard')
+      .then(function(r) { return r.json(); })
+      .then(function(s) {
+        var el = document.getElementById('raid-results-scores');
+        if (!el) { clearInterval(_raidScorePollHandle); return; }
+        el.innerHTML = (s || []).map(function(sc) {
+          return '<div class="raid-scoreboard-row">' +
+            '<span class="raid-clan-rank">#' + sc.rank + '</span>' +
+            '<span class="raid-clan-name">' + escHtml(sc.clan_name) + '</span>' +
+            '<span class="raid-clan-score">' + sc.score + ' pts</span>' +
+          '</div>';
+        }).join('');
+      }).catch(function() {});
+  }, 5000);
 }

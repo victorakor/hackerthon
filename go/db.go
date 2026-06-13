@@ -392,8 +392,11 @@ func createTables() error {
 		clan_id    INT NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
 		count      INT NOT NULL DEFAULT 0,
 		disqualified BOOLEAN NOT NULL DEFAULT FALSE,
+		finished   BOOLEAN NOT NULL DEFAULT FALSE,
 		PRIMARY KEY (raid_id, user_id)
 	)`)
+	// Migration: add finished column if it doesn't exist (for existing DBs)
+	DB.Exec(`ALTER TABLE raid_violations ADD COLUMN IF NOT EXISTS finished BOOLEAN NOT NULL DEFAULT FALSE`)
 
 	var count int
 	DB.QueryRow(`SELECT COUNT(*) FROM questions`).Scan(&count)

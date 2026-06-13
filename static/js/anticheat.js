@@ -97,13 +97,26 @@ var AntiCheat = (function () {
         '<p style="margin:12px 0 4px">You have been removed from this contest for violating the rules.</p>' +
         '<p style="color:var(--muted);font-size:13px">Your score has been frozen at your current progress.<br>The contest continues for other participants.</p>' +
         '<div class="modal-actions" style="margin-top:20px">' +
-          '<button class="btn btn-primary" onclick="' +
-            'document.getElementById(\'dq-modal\').remove();' +
-            '_arenaExit();' +
-          '">OK</button>' +
+          '<button class="btn btn-primary" id="dq-modal-ok-btn">OK</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(el);
+
+    document.getElementById('dq-modal-ok-btn').addEventListener('click', function() {
+      document.getElementById('dq-modal').remove();
+      // For raids, redirect to the locked results view instead of arena exit
+      if (_contestType === 'raid' && typeof _renderRaidResultsView === 'function') {
+        if (typeof _raidCountdownHandle !== 'undefined' && _raidCountdownHandle) clearInterval(_raidCountdownHandle);
+        if (typeof _raidScorePollHandle !== 'undefined' && _raidScorePollHandle) clearInterval(_raidScorePollHandle);
+        var rid = _contestID;
+        _raidArenaId = null;
+        _raidQuestions = [];
+        _raidCurrentQ = null;
+        _renderRaidResultsView(rid, 'you have been disqualified from this raid');
+      } else if (typeof _arenaExit === 'function') {
+        _arenaExit();
+      }
+    });
   }
 
   function attachListeners() {

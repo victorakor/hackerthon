@@ -255,6 +255,19 @@ func HandleRaidEnter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Block disqualified or finished users — they can only watch results
+	var isDisqualified, isFinished bool
+	DB.QueryRow(`SELECT disqualified, COALESCE(finished, FALSE) FROM raid_violations WHERE raid_id=$1 AND user_id=$2`,
+		id, u.ID).Scan(&isDisqualified, &isFinished)
+	if isDisqualified {
+		http.Error(w, "you have been disqualified from this raid", 403)
+		return
+	}
+	if isFinished {
+		http.Error(w, "you have already finished this raid", 403)
+		return
+	}
+
 	// Fetch questions
 	questions, err := getRaidQuestions(id)
 	if err != nil || len(questions) == 0 {
@@ -317,6 +330,19 @@ func HandleRaidArenaSubmit(w http.ResponseWriter, r *http.Request) {
 		id, myClanID).Scan(&inRaid)
 	if !inRaid {
 		http.Error(w, "your clan is not part of this raid", 403)
+		return
+	}
+
+	// Block disqualified or finished users from submitting
+	var isDisqualifiedSub, isFinishedSub bool
+	DB.QueryRow(`SELECT disqualified, COALESCE(finished, FALSE) FROM raid_violations WHERE raid_id=$1 AND user_id=$2`,
+		id, u.ID).Scan(&isDisqualifiedSub, &isFinishedSub)
+	if isDisqualifiedSub {
+		http.Error(w, "you have been disqualified from this raid", 403)
+		return
+	}
+	if isFinishedSub {
+		http.Error(w, "you have already finished this raid", 403)
 		return
 	}
 
@@ -412,6 +438,40 @@ func HandleRaidLeaderboard(w http.ResponseWriter, r *http.Request) {
 	scores := getRaidClanScores(id)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(scores)
+}
+
+// POST /api/raids/{id}/finish
+// Called when a user solves all questions or explicitly finishes. Marks them as done
+// so they cannot re-enter the arena — they are redirected to the results view.
+func HandleRaidFinish(w http.ResponseWriter, r *http.Request) {
+	u := RequireAuth(w, r)
+	if u == nil {
+		return
+	}
+	id := parseIDFromPath(r.URL.Path, "/api/raids/", "/finish")
+	if id == 0 {
+		http.Error(w, "invalid raid id", 400)
+		return
+	}
+
+	// Upsert a violations row marking this user as finished
+	DB.Exec(`
+		INSERT INTO raid_violations (raid_id, user_id, clan_id, count, finished)
+		SELECT $1, $2, cm.clan_id, 0, TRUE
+		FROM clan_members cm WHERE cm.user_id=$2
+		ON CONFLICT (raid_id, user_id) DO UPDATE SET finished=TRUE`,
+		id, u.ID)
+
+	d, err := getRaidDetail(id)
+	if err != nil {
+		http.Error(w, "raid not found", 404)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"finished":    true,
+		"clan_scores": d.Clans,
+	})
 }
 
 // POST /api/raids/{id}/violation
