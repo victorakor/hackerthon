@@ -19,6 +19,14 @@ func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/index.html")
 		return
 	}
+	// Disable caching for JS/CSS/HTML so deployed updates always load fresh
+	if strings.HasSuffix(r.URL.Path, ".js") ||
+		strings.HasSuffix(r.URL.Path, ".css") ||
+		strings.HasSuffix(r.URL.Path, ".html") {
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+	}
 	h.fs.ServeHTTP(w, r)
 }
 
