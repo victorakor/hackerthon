@@ -1,35 +1,56 @@
 // ── Clan Tab Entry Point ──────────────────────────────────────────────────────
 
 function initClanTab() {
+  console.log('[CLAN] initClanTab called');
   renderClanTab();
 }
 
 function renderClanTab() {
+  console.log('[CLAN] renderClanTab called');
   var container = document.getElementById('clan-view');
-  if (!container) return;
+  if (!container) {
+    console.error('[CLAN] ERROR: #clan-view element not found in DOM!');
+    return;
+  }
+  console.log('[CLAN] #clan-view found, fetching /api/clans/mine ...');
 
   // Check if user is in a clan first
   apiFetch('/api/clans/mine')
     .then(function(r) {
-      if (!r.ok) { renderClanBrowser(); return null; }
+      console.log('[CLAN] /api/clans/mine response — status:', r.status, 'ok:', r.ok);
+      if (!r.ok) {
+        console.warn('[CLAN] /api/clans/mine not ok (status ' + r.status + '), calling renderClanBrowser()');
+        renderClanBrowser();
+        return null;
+      }
       return r.json();
     })
     .then(function(myClan) {
+      if (myClan === null) return; // already handled above
+      console.log('[CLAN] /api/clans/mine parsed JSON:', JSON.stringify(myClan));
       if (!myClan || !myClan.id) {
+        console.log('[CLAN] No clan membership found (myClan is null/empty), calling renderClanBrowser()');
         renderClanBrowser();
         return;
       }
+      console.log('[CLAN] User is in clan id=' + myClan.id + ', calling renderMyClanView()');
       renderMyClanView(myClan);
     })
-    .catch(function() {
+    .catch(function(err) {
+      console.error('[CLAN] ERROR in renderClanTab fetch chain:', err);
       renderClanBrowser();
-  });
+    });
 }
 
 // ── Clan Browser (user not in a clan) ────────────────────────────────────────
 
 function renderClanBrowser() {
+  console.log('[CLAN] renderClanBrowser called');
   var container = document.getElementById('clan-view');
+  if (!container) {
+    console.error('[CLAN] ERROR: #clan-view not found inside renderClanBrowser!');
+    return;
+  }
   container.innerHTML = `
     <div class="clan-browser">
       <div class="clan-browser-header">
@@ -45,19 +66,37 @@ function renderClanBrowser() {
     </div>
     ${createClanModalHTML()}
   `;
+  console.log('[CLAN] renderClanBrowser: innerHTML set, checking for Create button and modal in DOM...');
+  var btn = container.querySelector('.btn-clan-create');
+  var modal = document.getElementById('create-clan-modal');
+  console.log('[CLAN] .btn-clan-create found:', !!btn, '| #create-clan-modal found:', !!modal);
   loadClanList();
 }
 
 function loadClanList() {
+  console.log('[CLAN] loadClanList called, fetching /api/clans ...');
   apiFetch('/api/clans')
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      console.log('[CLAN] /api/clans response — status:', r.status, 'ok:', r.ok);
+      if (!r.ok) {
+        throw new Error('HTTP ' + r.status);
+      }
+      return r.json();
+    })
     .then(function(clans) {
+      console.log('[CLAN] /api/clans parsed JSON — type:', typeof clans, 'isArray:', Array.isArray(clans), 'length:', clans ? clans.length : 'N/A');
       var area = document.getElementById('clan-list-area');
-      if (!area) return;
-      if (!clans || clans.length === 0) {
-        area.innerHTML = '<div class="clan-empty">No clans yet. Be the first to create one!<br><br><button class="btn-clan-create" onclick="showCreateClanModal()" style="margin-top:8px">+ Create Clan</button></div>';
+      if (!area) {
+        console.error('[CLAN] ERROR: #clan-list-area not found! Was renderClanBrowser called first?');
         return;
       }
+      if (!clans || clans.length === 0) {
+        console.log('[CLAN] No clans exist — rendering empty state with Create button');
+        area.innerHTML = '<div class="clan-empty">No clans yet. Be the first to create one!<br><br><button class="btn-clan-create" onclick="showCreateClanModal()" style="margin-top:8px">+ Create Clan</button></div>';
+        console.log('[CLAN] Empty state rendered. Create button in area:', !!area.querySelector('.btn-clan-create'));
+        return;
+      }
+      console.log('[CLAN] Rendering ' + clans.length + ' clan(s)');
       area.innerHTML = clans.map(function(c) {
         return `
           <div class="clan-card" onclick="showClanDetail(${c.id})">
@@ -77,15 +116,21 @@ function loadClanList() {
         `;
       }).join('');
     })
-    .catch(function() {
+    .catch(function(err) {
+      console.error('[CLAN] ERROR in loadClanList:', err);
       var area = document.getElementById('clan-list-area');
-      if (area) area.innerHTML = '<div class="clan-empty">Failed to load clans. <a href="#" onclick="loadClanList();return false">Retry</a><br><br><button class="btn-clan-create" onclick="showCreateClanModal()" style="margin-top:8px">+ Create Clan</button></div>';
+      if (area) {
+        area.innerHTML = '<div class="clan-empty">Failed to load clans. <a href="#" onclick="loadClanList();return false">Retry</a><br><br><button class="btn-clan-create" onclick="showCreateClanModal()" style="margin-top:8px">+ Create Clan</button></div>';
+      } else {
+        console.error('[CLAN] ERROR: #clan-list-area also missing during error handling!');
+      }
     });
 }
 
 // ── Clan Detail Modal (from browser) ─────────────────────────────────────────
 
 function showClanDetail(clanID) {
+  console.log('[CLAN] showClanDetail called for clanID:', clanID);
   apiFetch('/api/clans/' + clanID)
     .then(function(r) { return r.json(); })
     .then(function(clan) {
@@ -140,6 +185,7 @@ function closeClanDetailModal() {
 // ── My Clan View (user is in a clan) ─────────────────────────────────────────
 
 function renderMyClanView(clan) {
+  console.log('[CLAN] renderMyClanView called for clan:', clan.name, 'role:', clan.my_role);
   var container = document.getElementById('clan-view');
   container.innerHTML = `
     <div class="my-clan-view">
@@ -252,12 +298,21 @@ function createClanModalHTML() {
 }
 
 function showCreateClanModal() {
-  document.getElementById('create-clan-modal').style.display = 'flex';
+  console.log('[CLAN] showCreateClanModal called');
+  var modal = document.getElementById('create-clan-modal');
+  if (!modal) {
+    console.error('[CLAN] ERROR: #create-clan-modal not found in DOM! Was renderClanBrowser() called?');
+    return;
+  }
+  modal.style.display = 'flex';
+  console.log('[CLAN] Modal display set to flex');
 }
 
 function closeCreateClanModal() {
-  document.getElementById('create-clan-modal').style.display = 'none';
-  document.getElementById('clan-create-error').style.display = 'none';
+  var modal = document.getElementById('create-clan-modal');
+  if (modal) modal.style.display = 'none';
+  var err = document.getElementById('clan-create-error');
+  if (err) err.style.display = 'none';
 }
 
 function submitCreateClan() {
@@ -265,6 +320,8 @@ function submitCreateClan() {
   var tag  = document.getElementById('clan-tag-input').value.trim();
   var desc = document.getElementById('clan-desc-input').value.trim();
   var errEl = document.getElementById('clan-create-error');
+
+  console.log('[CLAN] submitCreateClan — name:', name, 'tag:', tag);
 
   if (!name || !tag) {
     errEl.textContent = 'Name and tag are required.';
@@ -277,20 +334,24 @@ function submitCreateClan() {
     return;
   }
 
+  console.log('[CLAN] Posting to /api/clans ...');
   apiFetch('/api/clans', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: name, tag: tag, description: desc })
   })
     .then(function(r) {
+      console.log('[CLAN] POST /api/clans response — status:', r.status, 'ok:', r.ok);
       if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
       return r.json();
     })
-    .then(function() {
+    .then(function(data) {
+      console.log('[CLAN] Clan created successfully:', JSON.stringify(data));
       closeCreateClanModal();
       renderClanTab();
     })
     .catch(function(e) {
+      console.error('[CLAN] ERROR creating clan:', e);
       errEl.textContent = e.message || 'Failed to create clan.';
       errEl.style.display = '';
     });
@@ -299,8 +360,10 @@ function submitCreateClan() {
 // ── Join / Leave ──────────────────────────────────────────────────────────────
 
 function joinClan(clanID) {
+  console.log('[CLAN] joinClan called for clanID:', clanID);
   apiFetch('/api/clans/' + clanID + '/join', { method: 'POST' })
     .then(function(r) {
+      console.log('[CLAN] JOIN response — status:', r.status, 'ok:', r.ok);
       if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
       return r.json();
     })
@@ -308,6 +371,7 @@ function joinClan(clanID) {
       renderClanTab();
     })
     .catch(function(e) {
+      console.error('[CLAN] ERROR joining clan:', e);
       alert(e.message || 'Failed to join clan.');
     });
 }
@@ -316,6 +380,7 @@ function confirmLeaveClan(clanID) {
   if (!confirm('Are you sure you want to leave this clan?')) return;
   apiFetch('/api/clans/' + clanID + '/leave', { method: 'DELETE' })
     .then(function(r) {
+      console.log('[CLAN] LEAVE response — status:', r.status, 'ok:', r.ok);
       if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
       return r.json();
     })
@@ -324,6 +389,7 @@ function confirmLeaveClan(clanID) {
       renderClanTab();
     })
     .catch(function(e) {
+      console.error('[CLAN] ERROR leaving clan:', e);
       alert(e.message || 'Failed to leave clan.');
     });
 }
