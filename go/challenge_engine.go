@@ -12,9 +12,16 @@ func StartContestEngine() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for range ticker.C {
-			tickChallenges()
-			tickTournaments()
-			tickRaids()
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("contest engine: recovered panic: %v", r)
+					}
+				}()
+				tickChallenges()
+				tickTournaments()
+				tickRaids()
+			}()
 		}
 	}()
 	log.Println("✓ Contest engine started")
@@ -290,21 +297,28 @@ func tickRaids() {
 	now := time.Now().UTC()
 
 	// 1. upcoming raids whose scheduled_at has arrived → activate
+	// Collect IDs first, close cursor, THEN activate (avoids nested open cursors)
 	rows, err := DB.Query(`
-		SELECT id, initiating_clan_id FROM raids
+		SELECT id FROM raids
 		WHERE status = 'upcoming' AND scheduled_at <= $1`, now)
 	if err != nil {
 		log.Printf("raid engine: query upcoming raids: %v", err)
 		return
 	}
-	defer rows.Close()
+	var toActivate []int
 	for rows.Next() {
-		var id, initiatingClanID int
-		rows.Scan(&id, &initiatingClanID)
+		var id int
+		rows.Scan(&id)
+		toActivate = append(toActivate, id)
+	}
+	rows.Close() // close BEFORE calling activateRaid
+
+	for _, id := range toActivate {
 		activateRaid(id)
 	}
 
 	// 2. active raids past their duration → complete
+	// Same pattern: collect, close, then act
 	rows2, err := DB.Query(`
 		SELECT id FROM raids
 		WHERE status = 'active'
@@ -313,10 +327,15 @@ func tickRaids() {
 		log.Printf("raid engine: query active raids: %v", err)
 		return
 	}
-	defer rows2.Close()
+	var toComplete []int
 	for rows2.Next() {
 		var id int
 		rows2.Scan(&id)
+		toComplete = append(toComplete, id)
+	}
+	rows2.Close() // close BEFORE calling completeRaid
+
+	for _, id := range toComplete {
 		completeRaid(id)
 	}
 }
@@ -370,7 +389,8 @@ func activateRaid(raidID int) {
 	}
 
 	if len(questionIDs) == 0 {
-		log.Printf("raid engine: no visible questions available for raid %d", raidID)
+		log.Printf("raid engine: no visible questions for raid %d — marking completed to prevent retry loop", raidID)
+		DB.Exec(`UPDATE raids SET status='completed' WHERE id=$1`, raidID)
 		return
 	}
 

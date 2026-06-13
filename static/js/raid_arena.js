@@ -121,7 +121,16 @@ function _startRaidCountdown() {
       el.style.display = '';
       clearInterval(_raidCountdownHandle);
       showToast('Raid has ended!', 'success');
-      setTimeout(function() { _raidArenaExit(); }, 2500);
+      setTimeout(function() {
+        // Auto-exit directly — no confirm modal needed since raid is already over
+        currentQuestion = null;
+        if (_raidCountdownHandle) clearInterval(_raidCountdownHandle);
+        if (_raidScorePollHandle) clearInterval(_raidScorePollHandle);
+        _raidArenaId = null;
+        _raidQuestions = [];
+        _raidCurrentQ = null;
+        renderClanTab();
+      }, 2500);
       return;
     }
     var mins = Math.floor(diff / 60000);
