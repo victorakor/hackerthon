@@ -23,13 +23,24 @@ function renderClanTab() {
         renderClanBrowser();
         return null;
       }
-      return r.json();
+      // Clone response so we can read body twice — once as text for logging, once as JSON
+      return r.clone().text().then(function(raw) {
+        console.log('[CLAN] /api/clans/mine raw body:', JSON.stringify(raw));
+        try {
+          var parsed = JSON.parse(raw);
+          console.log('[CLAN] /api/clans/mine parsed JSON:', JSON.stringify(parsed));
+          return parsed;
+        } catch(e) {
+          console.error('[CLAN] /api/clans/mine JSON.parse FAILED:', e.message, '— raw was:', JSON.stringify(raw));
+          return null;
+        }
+      });
     })
     .then(function(myClan) {
-      if (myClan === null) return; // already handled above
-      console.log('[CLAN] /api/clans/mine parsed JSON:', JSON.stringify(myClan));
+      if (myClan === undefined) return; // already handled above
+      console.log('[CLAN] myClan value:', JSON.stringify(myClan), '| type:', typeof myClan);
       if (!myClan || !myClan.id) {
-        console.log('[CLAN] No clan membership found (myClan is null/empty), calling renderClanBrowser()');
+        console.log('[CLAN] No clan membership found (myClan is null/empty/no id), calling renderClanBrowser()');
         renderClanBrowser();
         return;
       }
@@ -37,7 +48,7 @@ function renderClanTab() {
       renderMyClanView(myClan);
     })
     .catch(function(err) {
-      console.error('[CLAN] ERROR in renderClanTab fetch chain:', err);
+      console.error('[CLAN] UNCAUGHT ERROR in renderClanTab fetch chain:', err && err.message, err);
       renderClanBrowser();
     });
 }
