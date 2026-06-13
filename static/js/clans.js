@@ -15,12 +15,11 @@ function renderClanTab() {
       return r.json();
     })
     .then(function(myClan) {
-      if (!myClan) return;
-      if (myClan.id) {
-        renderMyClanView(myClan);
-      } else {
+      if (!myClan || !myClan.id) {
         renderClanBrowser();
+        return;
       }
+      renderMyClanView(myClan);
     })
     .catch(function() {
       renderClanBrowser();
