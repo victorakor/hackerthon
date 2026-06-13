@@ -184,9 +184,30 @@ function _raidSelectQuestion(qid) {
             (isSolved ? '<span class="badge badge-solved">✓ Solved</span>' : '') +
           '</div>' +
         '</div>' +
+        '<div class="detail-actions">' +
+          '<button class="btn-action btn-hint" onclick="toggleRaidHint()">💡 Hint</button>' +
+          '<button class="btn-action btn-ai-hint" id="ai-hint-btn" onclick="requestAiHint(' + q.id + ')">' +
+            '🤖 AI Hint <span class="ai-hint-badge" id="ai-hint-badge">⌛</span>' +
+          '</button>' +
+        '</div>' +
       '</div>' +
       '<div class="detail-body">' +
         '<div class="detail-description">' + escHtml(q.description) + '</div>' +
+        // Static hint box (toggled by Hint button)
+        '<div class="detail-hint" id="hint-box" style="display:none">' +
+          '<div class="hint-label">💡 Hint</div>' +
+          '<div class="hint-text">' + escHtml(q.hint_text || '') +
+            (q.hint_url ? ' — <a class="hint-link" href="' + escHtml(q.hint_url) + '" target="_blank" rel="noopener">Open docs ↗</a>' : '') +
+          '</div>' +
+        '</div>' +
+        // AI hint streaming panel
+        '<div class="ai-hint-panel" id="ai-hint-panel" style="display:none">' +
+          '<div class="ai-hint-header">' +
+            '<span class="ai-hint-label">🤖 AI Nudge</span>' +
+            '<button class="ai-hint-close" onclick="document.getElementById(\'ai-hint-panel\').style.display=\'none\'">✕</button>' +
+          '</div>' +
+          '<div class="ai-hint-text" id="ai-hint-text"></div>' +
+        '</div>' +
       '</div>' +
     '</div>' +
 
@@ -220,6 +241,12 @@ function _raidSelectQuestion(qid) {
   initCodeEditor();
 
   if (typeof initHintStatus === 'function') initHintStatus(q.id);
+}
+
+function toggleRaidHint() {
+  var box = document.getElementById('hint-box');
+  if (!box) return;
+  box.style.display = (box.style.display === 'none' || box.style.display === '') ? 'block' : 'none';
 }
 
 async function _raidArenaSubmit(qid) {
