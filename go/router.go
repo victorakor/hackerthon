@@ -160,14 +160,14 @@ func RegisterRoutes() {
 	http.HandleFunc("/api/clans/", WithCORS(func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
 		switch {
+		case path == "/api/clans/mine":
+			HandleMyClan(w, r)
+		case path == "/api/clans/leaderboard":
+			HandleClanLeaderboard(w, r)
 		case strings.HasSuffix(path, "/join"):
 			HandleJoinClan(w, r)
 		case strings.HasSuffix(path, "/leave"):
 			HandleLeaveClan(w, r)
-		case path == "/api/clans/leaderboard":
-			HandleClanLeaderboard(w, r)
-		case path == "/api/clans/mine":
-			HandleMyClan(w, r)
 		case strings.HasSuffix(path, "/chat"):
 			if r.Method == http.MethodPost {
 				HandleSendClanMessage(w, r)

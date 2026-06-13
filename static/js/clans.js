@@ -55,7 +55,7 @@ function loadClanList() {
       var area = document.getElementById('clan-list-area');
       if (!area) return;
       if (!clans || clans.length === 0) {
-        area.innerHTML = '<div class="clan-empty">No clans yet. Be the first to create one!</div>';
+        area.innerHTML = '<div class="clan-empty">No clans yet. Be the first to create one!<br><br><button class="btn-clan-create" onclick="showCreateClanModal()" style="margin-top:8px">+ Create Clan</button></div>';
         return;
       }
       area.innerHTML = clans.map(function(c) {
@@ -79,7 +79,7 @@ function loadClanList() {
     })
     .catch(function() {
       var area = document.getElementById('clan-list-area');
-      if (area) area.innerHTML = '<div class="clan-empty">Failed to load clans.</div>';
+      if (area) area.innerHTML = '<div class="clan-empty">Failed to load clans. <a href="#" onclick="loadClanList();return false">Retry</a><br><br><button class="btn-clan-create" onclick="showCreateClanModal()" style="margin-top:8px">+ Create Clan</button></div>';
     });
 }
 
