@@ -8,18 +8,14 @@ import (
 	"time"
 )
 
-// spaHandler serves static files when they exist, otherwise falls back to
-// index.html so the frontend JS can handle client-side routes like /reset-password.
 type spaHandler struct {
 	fs http.Handler
 }
 
 func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Let the real file server try first
 	path := "static" + r.URL.Path
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		// No matching file — serve index.html and let JS handle the route
 		http.ServeFile(w, r, "static/index.html")
 		return
 	}
@@ -50,6 +46,7 @@ func RegisterRoutes() {
 	http.HandleFunc("/api/auth/reset-password", WithCORS(HandleResetPassword))
 	http.HandleFunc("/api/auth/validate-reset-token", WithCORS(HandleValidateResetToken))
 	http.HandleFunc("/api/me", WithCORS(HandleMe))
+
 	// Admin
 	http.HandleFunc("/api/admin/users", WithCORS(HandleAdminUsers))
 	http.HandleFunc("/api/admin/promote", WithCORS(HandleAdminPromote))
@@ -76,12 +73,12 @@ func RegisterRoutes() {
 	http.HandleFunc("/api/hint", WithCORS(HandleHint))
 	http.HandleFunc("/api/hint/status", WithCORS(HandleHintStatus))
 
-	// Social — feed notifications (follows-based)
+	// Social
 	http.HandleFunc("/api/search", WithCORS(HandleSearch))
 	http.HandleFunc("/api/follows", WithCORS(HandleFollows))
 	http.HandleFunc("/api/notifications", WithCORS(HandleNotifications))
 
-	// Contest notifications (challenge/tournament system) — separate endpoint
+	// Contest notifications
 	http.HandleFunc("/api/contest-notifications", WithCORS(HandleNotifications2))
 
 	// ── Challenges ────────────────────────────────────────────────────────────
@@ -99,8 +96,10 @@ func RegisterRoutes() {
 			HandleAcceptChallenge(w, r)
 		case strings.HasSuffix(path, "/reject"):
 			HandleRejectChallenge(w, r)
-		case strings.HasSuffix(path, "/submit"):
-			HandleChallengeSubmit(w, r)
+		case strings.HasSuffix(path, "/enter"):
+			HandleChallengeEnter(w, r)
+		case strings.HasSuffix(path, "/arena-submit"):
+			HandleChallengeArenaSubmit(w, r)
 		case strings.HasSuffix(path, "/result"):
 			HandleChallengeResult(w, r)
 		case strings.HasSuffix(path, "/violation"):
@@ -127,8 +126,10 @@ func RegisterRoutes() {
 			HandleJoinTournament(w, r)
 		case strings.HasSuffix(path, "/leave"):
 			HandleLeaveTournament(w, r)
-		case strings.HasSuffix(path, "/submit"):
-			HandleTournamentSubmit(w, r)
+		case strings.HasSuffix(path, "/enter"):
+			HandleTournamentEnter(w, r)
+		case strings.HasSuffix(path, "/arena-submit"):
+			HandleTournamentArenaSubmit(w, r)
 		case strings.HasSuffix(path, "/leaderboard"):
 			HandleTournamentLeaderboard(w, r)
 		case strings.HasSuffix(path, "/violation"):
@@ -138,26 +139,15 @@ func RegisterRoutes() {
 		}
 	}))
 	http.HandleFunc("/api/admin/tournaments/", WithCORS(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodDelete {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/questions") {
+			HandleAssignTournamentQuestions(w, r)
+		} else if r.Method == http.MethodDelete {
 			HandleDeleteTournament(w, r)
 		} else {
-			HandleAssignTournamentQuestions(w, r)
+			http.Error(w, "not found", 404)
 		}
 	}))
 
-	log.Println("✓ Routes registered")
-}
-
-func StartServer() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("🚀 Server running at http://localhost:%s", port)
-	srv := &http.Server{
-		Addr:         ":" + port,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
-	}
-	log.Fatal(srv.ListenAndServe())
+	log.Printf("Routes registered — server starting at %s", time.Now().Format(time.RFC3339))
 }

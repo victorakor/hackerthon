@@ -1,8 +1,8 @@
 // ── Challenges ────────────────────────────────────────────────────────────────
 
-var _activeChallengeID = null;  // challenge we are currently competing in
+var _activeChallengeArena = null; // { id, endsAt, questions }
 
-// ── Seen-state helpers (badge persistence) ────────────────────────────────────
+// ── Seen-state helpers ────────────────────────────────────────────────────────
 
 function _chSeenKey() {
   return 'ch_seen_' + (currentUser ? currentUser.id : 'anon');
@@ -16,29 +16,26 @@ function _markChallengesSeen(ids) {
   localStorage.setItem(_chSeenKey(), JSON.stringify(seen));
 }
 
-// Called once on enterApp — lights the badge if user has unseen challenges.
-// Never auto-opens any arena popup.
 async function initChallengeBadge() {
   try {
     var res = await apiFetch('/api/challenges');
     if (!res.ok) return;
     var challenges = await res.json();
     if (!challenges.length) return;
-
     var seen = _getSeenChallenges();
-    var hasUnseen = challenges.some(function(c) {
-      return seen.indexOf(c.id) === -1;
-    });
+    var hasUnseen = challenges.some(function(c) { return seen.indexOf(c.id) === -1; });
     if (hasUnseen) showNotifBadge();
   } catch(e) {}
 }
 
-// ── Entry point (called when user clicks the Challenges tab) ──────────────────
-
 async function initChallengesTab() {
   hideNotifBadge();
+  // If there's an active arena open, show it instead of the list
+  if (_activeChallengeArena) {
+    _renderChallengeArenaView(_activeChallengeArena.id, _activeChallengeArena.questions, _activeChallengeArena.endsAt);
+    return;
+  }
   await loadChallengeList();
-  // Mark all visible challenges as seen so badge won't re-light for these
   try {
     var res2 = await apiFetch('/api/challenges');
     if (res2.ok) {
@@ -46,7 +43,6 @@ async function initChallengesTab() {
       _markChallengesSeen(all.map(function(c) { return c.id; }));
     }
   } catch(e) {}
-  // No auto-arena here — user clicks "Enter Arena" on the card themselves
 }
 
 // ── Load & render challenge list ──────────────────────────────────────────────
@@ -78,6 +74,7 @@ function renderChallengeCard(c) {
   var opponent = isChallenger ? c.opponent_name : c.challenger_name;
   var role     = isChallenger ? 'You challenged' : 'Challenged by';
   var time     = new Date(c.scheduled_at).toLocaleString();
+  var dur      = c.duration_minutes || 60;
 
   var statusBadge = '<span class="status-badge status-' + c.status + '">' + c.status + '</span>';
 
@@ -88,7 +85,15 @@ function renderChallengeCard(c) {
       '<button class="btn btn-danger  btn-sm" onclick="rejectChallenge(' + c.id + ')">Decline</button>';
   }
   if (c.status === 'active') {
-    actions = '<button class="btn btn-primary btn-sm" onclick="enterChallengeArena(' + c.id + ')">Enter Arena</button>';
+    // Check if this user is already finished/disqualified for this challenge
+    var iAmFinished = isChallenger
+      ? (c.challenger_finished_at != null)
+      : (c.opponent_finished_at != null);
+    if (!iAmFinished) {
+      actions = '<button class="btn btn-primary btn-sm" onclick="enterChallengeArena(' + c.id + ')">Enter Arena</button>';
+    } else {
+      actions = '<span class="muted-text">Awaiting opponent…</span>';
+    }
   }
   if (c.status === 'completed') {
     actions = '<button class="btn btn-secondary btn-sm" onclick="viewChallengeResult(' + c.id + ')">View Result</button>';
@@ -99,7 +104,7 @@ function renderChallengeCard(c) {
       '<span class="challenge-vs">' + escHtml(role) + ' <strong>' + escHtml(opponent) + '</strong></span>' +
       statusBadge +
     '</div>' +
-    '<div class="challenge-meta">📅 ' + escHtml(time) + '</div>' +
+    '<div class="challenge-meta">📅 ' + escHtml(time) + ' &nbsp;·&nbsp; ⏱️ ' + dur + ' min</div>' +
     (c.status === 'completed' ?
       '<div class="challenge-scores">' +
         escHtml(c.challenger_name) + ': <strong>' + c.challenger_score + '</strong> &nbsp;|&nbsp; ' +
@@ -118,10 +123,9 @@ function openChallengeModal(opponentID, opponentName) {
     modal = buildChallengeModal();
     document.body.appendChild(modal);
   }
-  document.getElementById('challenge-opponent-id').value   = opponentID;
+  document.getElementById('challenge-opponent-id').value = opponentID;
   document.getElementById('challenge-opponent-name').textContent = escHtml(opponentName);
 
-  // Default to tomorrow at current time (rounded to nearest 15 min)
   var d = new Date(Date.now() + 24 * 3600 * 1000);
   d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
   document.getElementById('challenge-time-input').value = toLocalDatetimeInput(d);
@@ -139,7 +143,7 @@ function buildChallengeModal() {
       '<input type="hidden" id="challenge-opponent-id">' +
       '<label>Schedule date &amp; time (your local time)</label>' +
       '<input type="datetime-local" id="challenge-time-input" class="form-input">' +
-      '<p class="modal-hint">The challenge lasts exactly 1 hour from this time.</p>' +
+      '<p class="modal-hint">The admin will set the challenge duration when assigning questions.</p>' +
       '<div id="challenge-modal-error" class="error-text" style="display:none"></div>' +
       '<div class="modal-actions">' +
         '<button class="btn btn-primary" onclick="sendChallenge()">Send Challenge</button>' +
@@ -192,64 +196,88 @@ async function sendChallenge() {
 // ── Accept / Reject ───────────────────────────────────────────────────────────
 
 function acceptChallenge(id) {
-  var card = document.getElementById('challenge-' + id);
-  var timeText = card ? card.querySelector('.challenge-meta') : null;
-  var scheduledLabel = timeText ? timeText.textContent.replace('📅', '').trim() : '';
-
   showConfirmModal(
     '⚔️ Accept Challenge?',
-    scheduledLabel ? 'This challenge is scheduled for <strong>' + escHtml(scheduledLabel) + '</strong>.<br>Make sure you have no other contests at that time — accepting will lock the slot.' : 'Make sure you have no other contests at that time — accepting will lock the slot.',
+    'Are you sure you want to accept this challenge?',
     'Accept',
     async function() {
       try {
         var res = await apiFetch('/api/challenges/' + id + '/accept', { method: 'PATCH' });
         if (!res.ok) {
-          var errText = await res.text();
-          showToast((errText.trim() || 'Failed to accept.'), 'error');
+          var err = await res.text();
+          showToast(err.trim() || 'Failed to accept.', 'error');
           return;
         }
-        showToast('Challenge accepted! The admin will assign questions.');
+        showToast('Challenge accepted! ⚔️');
         loadChallengeList();
       } catch(e) { showToast('Network error.', 'error'); }
     }
   );
 }
 
-async function rejectChallenge(id) {
-  try {
-    var res = await apiFetch('/api/challenges/' + id + '/reject', { method: 'PATCH' });
-    if (!res.ok) { showToast('Failed to decline.', 'error'); return; }
-    showToast('Challenge declined.');
-    loadChallengeList();
-  } catch(e) { showToast('Network error.', 'error'); }
+function rejectChallenge(id) {
+  showConfirmModal(
+    'Decline Challenge?',
+    'Are you sure you want to decline this challenge?',
+    'Decline',
+    async function() {
+      try {
+        var res = await apiFetch('/api/challenges/' + id + '/reject', { method: 'PATCH' });
+        if (!res.ok) { showToast('Failed to decline.', 'error'); return; }
+        showToast('Challenge declined.');
+        loadChallengeList();
+      } catch(e) { showToast('Network error.', 'error'); }
+    }
+  );
 }
 
-// ── Enter / show arena ────────────────────────────────────────────────────────
+// ── Enter Arena ───────────────────────────────────────────────────────────────
 
 async function enterChallengeArena(id) {
   try {
-    var res = await apiFetch('/api/challenges/' + id);
-    if (!res.ok) { showToast('Could not load challenge.', 'error'); return; }
-    var detail = await res.json();
-    _activeChallengeID = id;
-
-    if (detail.status === 'active') {
-      showChallengeArena(id, detail.question_ids || [], detail.scheduled_at);
-    } else {
-      ContestTimer.schedule('challenge', id, detail.scheduled_at, detail.question_ids || [], {
-        onStart: function(qids) { showChallengeArena(id, qids, detail.scheduled_at); },
-        onEnd:   function()     { onContestEnd({ challenge_id: id }); }
-      });
-      showToast('Challenge starts at ' + new Date(detail.scheduled_at).toLocaleTimeString());
+    var res = await apiFetch('/api/challenges/' + id + '/enter', { method: 'POST' });
+    if (!res.ok) {
+      var errText = await res.text();
+      showToast(errText.trim() || 'Could not enter arena.', 'error');
+      return;
     }
+    var data = await res.json();
+    // data: { ends_at, duration_minutes, questions: [...] }
+
+    _activeChallengeArena = { id: id, endsAt: data.ends_at, questions: data.questions };
+
+    _renderChallengeArenaView(id, data.questions, data.ends_at);
   } catch(e) { showToast('Network error.', 'error'); }
 }
 
-function showChallengeArena(challengeID, questionIDs, scheduledAt) {
-  if (typeof switchTab === 'function') switchTab('questions');
-  if (typeof enterContestMode === 'function') {
-    enterContestMode('challenge', challengeID, questionIDs, scheduledAt);
-  }
+function _renderChallengeArenaView(challengeId, questions, endsAt) {
+  var container = document.getElementById('challenge-list');
+  if (!container) return;
+
+  // Render the arena panel inside the challenges tab
+  container.innerHTML = _buildArenaHTML('challenge', challengeId, questions, endsAt);
+
+  // Start anti-cheat
+  if (typeof AntiCheat !== 'undefined') AntiCheat.start('challenge', challengeId);
+
+  // Start timer
+  ContestTimer.resume('challenge', challengeId, endsAt, {
+    onEnd: function() { _exitChallengeArena('Time\'s up! Challenge ended for you.'); }
+  });
+
+  // Wire up question selection inside arena
+  _initArenaQuestionList('challenge', challengeId, questions);
+}
+
+function _exitChallengeArena(message) {
+  if (typeof AntiCheat !== 'undefined') AntiCheat.stop();
+  ContestTimer.clear();
+  _activeChallengeArena = null;
+  if (message) showToast(message);
+  // Remove any DQ modal if open
+  var dqModal = document.getElementById('dq-modal');
+  if (dqModal) dqModal.remove();
+  loadChallengeList();
 }
 
 // ── View result ───────────────────────────────────────────────────────────────
@@ -267,12 +295,9 @@ function showResultModal(r) {
   var existing = document.getElementById('result-modal');
   if (existing) existing.remove();
 
-  var winnerLine = '';
-  if (r.winner_id) {
-    winnerLine = '<p class="result-winner">🏆 Winner: <strong>' + escHtml(r.winner_name) + '</strong></p>';
-  } else {
-    winnerLine = '<p class="result-winner">🤝 It\'s a Tie!</p>';
-  }
+  var winnerLine = r.winner_id
+    ? '<p class="result-winner">🏆 Winner: <strong>' + escHtml(r.winner_name) + '</strong></p>'
+    : '<p class="result-winner">🤝 It\'s a Tie!</p>';
 
   var el = document.createElement('div');
   el.id = 'result-modal';
@@ -299,13 +324,11 @@ function showResultModal(r) {
   document.body.appendChild(el);
 }
 
-// ── Notification handlers (overrides stubs in contest_timer.js) ───────────────
+// ── Notification handlers ─────────────────────────────────────────────────────
 
 onChallengeReceived = function(p) {
   showNotifBadge();
   showToast('⚔️ ' + escHtml(p.challenger_name || 'Someone') + ' challenged you! Check the Challenges tab.');
-  // Mark as unseen so badge persists across reloads
-  // (badge clears only when user opens the tab)
 };
 
 onChallengeAccepted = function(p) {
@@ -327,24 +350,22 @@ onChallengeNeedsQuestions = function(p) {
 
 onContestStart = function(p) {
   if (!p.challenge_id) return;
-  showToast('🚀 Challenge #' + p.challenge_id + ' has started!');
-  // Auto-enter the arena because the live event just fired — this is intentional
-  enterChallengeArena(p.challenge_id);
+  showToast('🚀 Challenge #' + p.challenge_id + ' has started! Click Enter Arena when ready.');
+  showNotifBadge();
+  loadChallengeList();
 };
 
 onContestEnd = function(p) {
-  ContestTimer.clear();
-  showToast('⏱️ Challenge over! Fetching results…');
-  if (typeof exitContestMode === 'function') exitContestMode();
-  // Light the badge so the user knows there's a result
-  showNotifBadge();
-  setTimeout(function() {
-    if (p.challenge_id) viewChallengeResult(p.challenge_id);
+  if (_activeChallengeArena && _activeChallengeArena.id === p.challenge_id) {
+    _exitChallengeArena('⏱️ Challenge over! Fetching results…');
+  } else {
+    ContestTimer.clear();
+    showNotifBadge();
     loadChallengeList();
-  }, 1500);
+  }
 };
 
-// ── Admin: assign questions panel ─────────────────────────────────────────────
+// ── Admin ─────────────────────────────────────────────────────────────────────
 
 async function loadAdminChallenges() {
   var container = document.getElementById('admin-challenges-list');

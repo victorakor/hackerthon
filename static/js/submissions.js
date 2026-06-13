@@ -79,18 +79,7 @@ async function submitSolution(qid) {
     });
     if (!res.ok) { showToast(await res.text(), 'error'); return; }
     showToast('Solution submitted!', 'success');
-
-    // If we're in an active contest, record the pass there too
-    if (typeof _contestMode !== 'undefined' && _contestMode && _activeContestID) {
-      var contestEndpoint = _activeContestType === 'challenge'
-        ? '/api/challenges/' + _activeContestID + '/submit'
-        : '/api/tournaments/' + _activeContestID + '/submit';
-      apiFetch(contestEndpoint, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({question_id: qid, passed: true})
-      }).catch(function() {});
-    }
+    
     completedIds.add(qid);
     saveCompleted();
     updateProgress();

@@ -176,7 +176,6 @@ func createTables() error {
 	}
 
 	// ── Notifications table ───────────────────────────────────────────────────
-	// Used to push challenge invites and contest-start events to users.
 	_, err = DB.Exec(`
 		CREATE TABLE IF NOT EXISTS notifications (
 			id         SERIAL PRIMARY KEY,
@@ -212,8 +211,6 @@ func createTables() error {
 	)`)
 
 	// Anti-cheat columns added in v3
-
-	// Anti-cheat columns added in v3
 	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS violation_count INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS disqualified BOOLEAN NOT NULL DEFAULT FALSE`)
 	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS disqualified_at TIMESTAMPTZ`)
@@ -221,6 +218,16 @@ func createTables() error {
 	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_violations INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS challenger_disqualified BOOLEAN NOT NULL DEFAULT FALSE`)
 	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_disqualified BOOLEAN NOT NULL DEFAULT FALSE`)
+
+	// Arena isolation columns added in v4
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS duration_minutes INTEGER NOT NULL DEFAULT 60`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS challenger_entered_at TIMESTAMPTZ`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_entered_at TIMESTAMPTZ`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS challenger_finished_at TIMESTAMPTZ`)
+	DB.Exec(`ALTER TABLE challenges ADD COLUMN IF NOT EXISTS opponent_finished_at TIMESTAMPTZ`)
+	DB.Exec(`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS duration_minutes INTEGER NOT NULL DEFAULT 60`)
+	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS entered_at TIMESTAMPTZ`)
+	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ`)
 
 	if err := SeedAdminUser(); err != nil {
 		log.Printf("admin seed: %v", err)
@@ -236,7 +243,6 @@ func createTables() error {
 
 // ── Notification helpers ──────────────────────────────────────────────────────
 
-// CreateNotification inserts a notification row and returns its id.
 func CreateNotification(userID int, kind, payload string) (int, error) {
 	var id int
 	err := DB.QueryRow(
@@ -248,15 +254,24 @@ func CreateNotification(userID int, kind, payload string) (int, error) {
 
 // ── Challenge DB helpers ──────────────────────────────────────────────────────
 
-// GetChallenge fetches a single challenge by id.
 func GetChallenge(id int) (*Challenge, error) {
 	c := &Challenge{}
 	err := DB.QueryRow(`
 		SELECT id, challenger_id, opponent_id, scheduled_at, status,
-		       COALESCE(winner_id, 0), challenger_score, opponent_score, created_at
+		       COALESCE(winner_id, 0), challenger_score, opponent_score,
+		       COALESCE(duration_minutes, 60),
+		       challenger_entered_at, opponent_entered_at,
+		       challenger_finished_at, opponent_finished_at,
+		       created_at
 		FROM challenges WHERE id = $1`, id,
-	).Scan(&c.ID, &c.ChallengerID, &c.OpponentID, &c.ScheduledAt, &c.Status,
-		&c.WinnerID, &c.ChallengerScore, &c.OpponentScore, &c.CreatedAt)
+	).Scan(
+		&c.ID, &c.ChallengerID, &c.OpponentID, &c.ScheduledAt, &c.Status,
+		&c.WinnerID, &c.ChallengerScore, &c.OpponentScore,
+		&c.DurationMinutes,
+		&c.ChallengerEnteredAt, &c.OpponentEnteredAt,
+		&c.ChallengerFinishedAt, &c.OpponentFinishedAt,
+		&c.CreatedAt,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -282,6 +297,54 @@ func GetChallengeQuestions(challengeID int) ([]int, error) {
 	return ids, nil
 }
 
+// GetChallengeQuestionObjects returns full Question objects for a challenge.
+func GetChallengeQuestionObjects(challengeID int) ([]Question, error) {
+	rows, err := DB.Query(`
+		SELECT q.id, q.title, q.description, q.difficulty, q.category,
+		       q.hint_url, q.hint_text, q.visible,
+		       COALESCE(q.test_cases,'[]'), COALESCE(q.test_file,'')
+		FROM challenge_questions cq
+		JOIN questions q ON q.id = cq.question_id
+		WHERE cq.challenge_id = $1
+		ORDER BY cq.sort_order`, challengeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var qs []Question
+	for rows.Next() {
+		var q Question
+		rows.Scan(&q.ID, &q.Title, &q.Description, &q.Difficulty, &q.Category,
+			&q.HintURL, &q.HintText, &q.Visible, &q.TestCases, &q.TestFile)
+		qs = append(qs, q)
+	}
+	return qs, nil
+}
+
+// GetTournamentQuestionObjects returns full Question objects for a tournament.
+func GetTournamentQuestionObjects(tournamentID int) ([]Question, error) {
+	rows, err := DB.Query(`
+		SELECT q.id, q.title, q.description, q.difficulty, q.category,
+		       q.hint_url, q.hint_text, q.visible,
+		       COALESCE(q.test_cases,'[]'), COALESCE(q.test_file,'')
+		FROM tournament_questions tq
+		JOIN questions q ON q.id = tq.question_id
+		WHERE tq.tournament_id = $1
+		ORDER BY tq.sort_order`, tournamentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var qs []Question
+	for rows.Next() {
+		var q Question
+		rows.Scan(&q.ID, &q.Title, &q.Description, &q.Difficulty, &q.Category,
+			&q.HintURL, &q.HintText, &q.Visible, &q.TestCases, &q.TestFile)
+		qs = append(qs, q)
+	}
+	return qs, nil
+}
+
 // CountChallengeScore counts how many questions a user passed in a challenge.
 func CountChallengeScore(challengeID, userID int) (int, error) {
 	var n int
@@ -295,22 +358,20 @@ func CountChallengeScore(challengeID, userID int) (int, error) {
 
 // ── Tournament DB helpers ─────────────────────────────────────────────────────
 
-// GetTournament fetches a single tournament by id.
 func GetTournament(id int) (*Tournament, error) {
 	t := &Tournament{}
 	err := DB.QueryRow(`
 		SELECT id, title, description, created_by, scheduled_at,
-		       max_participants, status, created_at
+		       max_participants, status, COALESCE(duration_minutes,60), created_at
 		FROM tournaments WHERE id = $1`, id,
 	).Scan(&t.ID, &t.Title, &t.Description, &t.CreatedBy,
-		&t.ScheduledAt, &t.MaxParticipants, &t.Status, &t.CreatedAt)
+		&t.ScheduledAt, &t.MaxParticipants, &t.Status, &t.DurationMinutes, &t.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return t, nil
 }
 
-// GetTournamentParticipantCount returns the current number of joined participants.
 func GetTournamentParticipantCount(tournamentID int) (int, error) {
 	var n int
 	err := DB.QueryRow(
@@ -320,7 +381,6 @@ func GetTournamentParticipantCount(tournamentID int) (int, error) {
 	return n, err
 }
 
-// GetTournamentQuestions returns the ordered question IDs for a tournament.
 func GetTournamentQuestions(tournamentID int) ([]int, error) {
 	rows, err := DB.Query(
 		`SELECT question_id FROM tournament_questions WHERE tournament_id=$1 ORDER BY sort_order`,
@@ -339,7 +399,6 @@ func GetTournamentQuestions(tournamentID int) ([]int, error) {
 	return ids, nil
 }
 
-// GetTournamentLeaderboard returns participants ranked by questions passed.
 func GetTournamentLeaderboard(tournamentID int) ([]TournamentRank, error) {
 	rows, err := DB.Query(`
 		SELECT u.id, u.name,
@@ -370,7 +429,6 @@ func GetTournamentLeaderboard(tournamentID int) ([]TournamentRank, error) {
 	return ranks, nil
 }
 
-// GetChallengeLeaderboard returns both participants' scores for a challenge.
 func GetChallengeResult(challengeID int) (*ChallengeResult, error) {
 	c, err := GetChallenge(challengeID)
 	if err != nil {
@@ -398,6 +456,52 @@ func GetChallengeResult(challengeID int) (*ChallengeResult, error) {
 		WinnerID:        c.WinnerID,
 		WinnerName:      winnerName,
 	}, nil
+}
+
+// HasContestOverlap returns true if the given user already has an active/accepted
+// challenge or joined upcoming/active tournament whose window overlaps [start, start+duration).
+// It excludes contests where this user has personally finished (finished_at IS NOT NULL),
+// so disqualified/completed users are freed immediately.
+func HasContestOverlap(userID int, start time.Time) (bool, error) {
+	// Use a generous 24-hour window for the SQL index hint; the per-row
+	// duration_minutes column handles the precise boundary.
+	end := start.Add(24 * time.Hour)
+
+	var challengeConflict bool
+	err := DB.QueryRow(`
+        SELECT EXISTS(
+            SELECT 1 FROM challenges
+            WHERE status IN ('accepted', 'active')
+            AND (challenger_id = $1 OR opponent_id = $1)
+            AND scheduled_at < $3
+            AND scheduled_at + (COALESCE(duration_minutes,60) * interval '1 minute') > $2
+            AND NOT (
+                (challenger_id = $1 AND challenger_finished_at IS NOT NULL) OR
+                (opponent_id   = $1 AND opponent_finished_at   IS NOT NULL)
+            )
+        )`, userID, start, end).Scan(&challengeConflict)
+	if err != nil {
+		return false, err
+	}
+	if challengeConflict {
+		return true, nil
+	}
+
+	var tournamentConflict bool
+	err = DB.QueryRow(`
+        SELECT EXISTS(
+            SELECT 1 FROM tournaments t
+            JOIN tournament_participants tp ON tp.tournament_id = t.id
+            WHERE tp.user_id = $1
+            AND t.status IN ('upcoming', 'active')
+            AND t.scheduled_at < $3
+            AND t.scheduled_at + (COALESCE(t.duration_minutes,60) * interval '1 minute') > $2
+            AND tp.finished_at IS NULL
+        )`, userID, start, end).Scan(&tournamentConflict)
+	if err != nil {
+		return false, err
+	}
+	return tournamentConflict, nil
 }
 
 // ── Seed functions ────────────────────────────────────────────────────────────
@@ -456,41 +560,3 @@ func SeedQuestions() error {
 	return nil
 }
 
-// HasContestOverlap returns true if the given user already has an accepted challenge
-// or joined upcoming/active tournament whose 1-hour window overlaps [start, start+1h).
-func HasContestOverlap(userID int, start time.Time) (bool, error) {
-	end := start.Add(time.Hour)
-
-	// Check challenges: status accepted or active, window overlaps
-	var challengeConflict bool
-	err := DB.QueryRow(`
-        SELECT EXISTS(
-            SELECT 1 FROM challenges
-            WHERE status IN ('accepted', 'active')
-            AND (challenger_id = $1 OR opponent_id = $1)
-            AND scheduled_at < $3
-            AND scheduled_at + INTERVAL '1 hour' > $2
-        )`, userID, start, end).Scan(&challengeConflict)
-	if err != nil {
-		return false, err
-	}
-	if challengeConflict {
-		return true, nil
-	}
-
-	// Check tournaments: user is joined and tournament is upcoming or active, window overlaps
-	var tournamentConflict bool
-	err = DB.QueryRow(`
-        SELECT EXISTS(
-            SELECT 1 FROM tournaments t
-            JOIN tournament_participants tp ON tp.tournament_id = t.id
-            WHERE tp.user_id = $1
-            AND t.status IN ('upcoming', 'active')
-            AND t.scheduled_at < $3
-            AND t.scheduled_at + INTERVAL '1 hour' > $2
-        )`, userID, start, end).Scan(&tournamentConflict)
-	if err != nil {
-		return false, err
-	}
-	return tournamentConflict, nil
-}

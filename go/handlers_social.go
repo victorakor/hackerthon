@@ -167,6 +167,8 @@ func HandleFollows(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleNotifications serves the social feed — submissions by people you follow.
+// Uses a local FeedItem type (not the contest Notification type).
 func HandleNotifications(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", 405)
@@ -176,7 +178,7 @@ func HandleNotifications(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
-	type Notification struct {
+	type FeedItem struct {
 		Submission Submission `json:"submission"`
 		Question   Question   `json:"question"`
 	}
@@ -197,9 +199,9 @@ func HandleNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
-	var notifs []Notification
+	var notifs []FeedItem
 	for rows.Next() {
-		var n Notification
+		var n FeedItem
 		rows.Scan(
 			&n.Submission.ID, &n.Submission.QuestionID, &n.Submission.UserID,
 			&n.Submission.AuthorName, &n.Submission.Code, &n.Submission.Language,
@@ -211,13 +213,14 @@ func HandleNotifications(w http.ResponseWriter, r *http.Request) {
 		notifs = append(notifs, n)
 	}
 	if notifs == nil {
-		notifs = []Notification{}
+		notifs = []FeedItem{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(notifs)
 }
 
-// GET /api/notifications?since=0
+// HandleNotifications2 serves contest event notifications (challenge/tournament start/end etc.)
+// GET /api/contest-notifications?since=0
 func HandleNotifications2(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil {
@@ -225,11 +228,17 @@ func HandleNotifications2(w http.ResponseWriter, r *http.Request) {
 	}
 	var since int
 	fmt.Sscanf(r.URL.Query().Get("since"), "%d", &since)
-	rows, _ := DB.Query(
+
+	rows, err := DB.Query(
 		`SELECT id, user_id, kind, payload, read, created_at
          FROM notifications WHERE user_id=$1 AND id > $2
          ORDER BY id ASC LIMIT 50`, u.ID, since)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 	defer rows.Close()
+
 	var out []Notification
 	for rows.Next() {
 		var n Notification

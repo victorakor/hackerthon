@@ -1,28 +1,21 @@
 // ── Contest Timer ─────────────────────────────────────────────────────────────
-// Shared by both challenges and tournaments.
-// Manages the countdown, auto-triggers contest mode when time arrives,
-// and fires callbacks on start/end.
 
 var _contestTimer = null;
 
 var ContestTimer = {
-  // activeContest holds the current running contest state
-  // { type: 'challenge'|'tournament', id, endsAt (Date), questionIDs, onStart, onEnd }
   active: null,
 
-  // Start polling for a pending contest that hasn't begun yet.
-  // scheduledAt: ISO string, questionIDs: array, callbacks: { onStart, onEnd }
-  schedule: function(type, id, scheduledAt, questionIDs, callbacks) {
+  // For contests not yet started — pass scheduledAt ISO string and durationMinutes.
+  schedule: function(type, id, scheduledAt, durationMinutes, callbacks) {
     ContestTimer.clear();
     var startsAt = new Date(scheduledAt);
-    var endsAt   = new Date(startsAt.getTime() + 60 * 60 * 1000); // +1 hour
+    var endsAt   = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
 
     ContestTimer.active = {
       type:        type,
       id:          id,
       startsAt:    startsAt,
       endsAt:      endsAt,
-      questionIDs: questionIDs || [],
       onStart:     callbacks.onStart || function(){},
       onEnd:       callbacks.onEnd   || function(){}
     };
@@ -30,22 +23,18 @@ var ContestTimer = {
     ContestTimer._tick();
   },
 
-  // Call this when the contest is already active (status === 'active')
-  // and we just need the countdown + end detection.
-  resume: function(type, id, scheduledAt, questionIDs, callbacks) {
+  // For already-active contests — pass endsAt ISO string directly from server.
+  resume: function(type, id, endsAt, callbacks) {
     ContestTimer.clear();
-    var startsAt = new Date(scheduledAt);
-    var endsAt   = new Date(startsAt.getTime() + 60 * 60 * 1000);
+    var endsAtDate = new Date(endsAt);
 
     ContestTimer.active = {
-      type:        type,
-      id:          id,
-      startsAt:    startsAt,
-      endsAt:      endsAt,
-      questionIDs: questionIDs || [],
-      onStart:     callbacks.onStart || function(){},
-      onEnd:       callbacks.onEnd   || function(){},
-      started:     true   // already active, skip the start trigger
+      type:    type,
+      id:      id,
+      endsAt:  endsAtDate,
+      onStart: callbacks.onStart || function(){},
+      onEnd:   callbacks.onEnd   || function(){},
+      started: true
     };
 
     ContestTimer._tick();
@@ -61,7 +50,6 @@ var ContestTimer = {
   },
 
   _tick: function() {
-    // Run immediately then every second
     ContestTimer._evaluate();
     _contestTimer = setInterval(ContestTimer._evaluate, 1000);
   },
@@ -72,26 +60,22 @@ var ContestTimer = {
 
     var now = Date.now();
 
-    // ── Before start ──────────────────────────────────────────────────────────
     if (!ctx.started) {
       var msToStart = ctx.startsAt.getTime() - now;
       if (msToStart > 0) {
         ContestTimer._renderCountdown('Starts in', msToStart, 'countdown-pre');
         return;
       }
-      // Just crossed the start line
       ctx.started = true;
-      ctx.onStart(ctx.questionIDs);
+      ctx.onStart();
     }
 
-    // ── During contest ────────────────────────────────────────────────────────
     var msLeft = ctx.endsAt.getTime() - now;
     if (msLeft > 0) {
       ContestTimer._renderCountdown('Time remaining', msLeft, 'countdown-active');
       return;
     }
 
-    // ── Contest over ──────────────────────────────────────────────────────────
     ContestTimer._hideCountdown();
     clearInterval(_contestTimer);
     _contestTimer = null;
@@ -119,7 +103,6 @@ var ContestTimer = {
       '<span class="countdown-label">' + escHtml(label) + '</span>' +
       '<span class="countdown-time">' + hh + mm + ss + '</span>';
 
-    // Turn red in last 5 minutes
     if (ms < 5 * 60 * 1000) {
       el.classList.add('countdown-danger');
     }
@@ -133,7 +116,6 @@ var ContestTimer = {
 
 
 // ── Notification poller ───────────────────────────────────────────────────────
-// Polls /api/notifications every 15 seconds and dispatches events.
 
 var _notifPollTimer = null;
 var _lastNotifID    = 0;
@@ -144,11 +126,9 @@ function _notifIDKey() {
 
 function startNotificationPolling() {
   if (_notifPollTimer) return;
-  // Restore the last-seen notification ID from localStorage so old
-  // contest_end / tournament_end events are never re-dispatched on reload or login
   var saved = parseInt(localStorage.getItem(_notifIDKey()) || '0', 10);
   if (saved > _lastNotifID) _lastNotifID = saved;
-  pollNotifications(); // immediate first check
+  pollNotifications();
   _notifPollTimer = setInterval(pollNotifications, 15000);
 }
 
@@ -169,7 +149,6 @@ async function pollNotifications() {
     notifs.forEach(function(n) {
       if (n.id > _lastNotifID) {
         _lastNotifID = n.id;
-        // Persist so reloads and re-logins don't re-dispatch old events
         localStorage.setItem(_notifIDKey(), _lastNotifID);
       }
       dispatchNotification(n);
@@ -182,31 +161,15 @@ function dispatchNotification(n) {
   try { payload = JSON.parse(n.payload); } catch(e) {}
 
   switch (n.kind) {
-    case 'challenge_received':
-      onChallengeReceived(payload);
-      break;
-    case 'challenge_accepted':
-      onChallengeAccepted(payload);
-      break;
-    case 'challenge_rejected':
-      onChallengeRejected(payload);
-      break;
+    case 'challenge_received':        onChallengeReceived(payload);       break;
+    case 'challenge_accepted':        onChallengeAccepted(payload);       break;
+    case 'challenge_rejected':        onChallengeRejected(payload);       break;
     case 'challenge_needs_questions':
-    case 'challenge_pending_questions':
-      onChallengeNeedsQuestions(payload);
-      break;
-    case 'contest_start':
-      onContestStart(payload);
-      break;
-    case 'contest_end':
-      onContestEnd(payload);
-      break;
-    case 'tournament_start':
-      onTournamentStart(payload);
-      break;
-    case 'tournament_end':
-      onTournamentEnd(payload);
-      break;
+    case 'challenge_pending_questions': onChallengeNeedsQuestions(payload); break;
+    case 'contest_start':             onContestStart(payload);            break;
+    case 'contest_end':               onContestEnd(payload);              break;
+    case 'tournament_start':          onTournamentStart(payload);         break;
+    case 'tournament_end':            onTournamentEnd(payload);           break;
   }
 }
 

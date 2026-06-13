@@ -3,11 +3,11 @@ package app
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
 // POST /api/tournaments  (admin only)
-// Body: { "title": "...", "description": "...", "scheduled_at": "RFC3339", "max_participants": 16 }
 func HandleCreateTournament(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil || !u.IsAdmin {
@@ -54,8 +54,7 @@ func HandleCreateTournament(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{"id": id, "message": "Tournament created"})
 }
 
-// GET /api/tournaments  — list all tournaments (public)
-// Optional query param: ?status=upcoming|active|completed
+// GET /api/tournaments
 func HandleListTournaments(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil {
@@ -66,7 +65,7 @@ func HandleListTournaments(w http.ResponseWriter, r *http.Request) {
 
 	query := `
 		SELECT t.id, t.title, t.description, t.created_by, t.scheduled_at,
-		       t.max_participants, t.status, t.created_at,
+		       t.max_participants, t.status, COALESCE(t.duration_minutes,60), t.created_at,
 		       COUNT(tp.user_id) AS participant_count,
 		       BOOL_OR(tp.user_id = $1) AS is_joined
 		FROM tournaments t
@@ -92,7 +91,7 @@ func HandleListTournaments(w http.ResponseWriter, r *http.Request) {
 		var d TournamentDetail
 		rows.Scan(
 			&d.ID, &d.Title, &d.Description, &d.CreatedBy, &d.ScheduledAt,
-			&d.MaxParticipants, &d.Status, &d.CreatedAt,
+			&d.MaxParticipants, &d.Status, &d.DurationMinutes, &d.CreatedAt,
 			&d.ParticipantCount, &d.IsJoined,
 		)
 		out = append(out, d)
@@ -133,12 +132,6 @@ func HandleGetTournament(w http.ResponseWriter, r *http.Request) {
 		Tournament:       *t,
 		ParticipantCount: count,
 		IsJoined:         isJoined,
-	}
-
-	// Attach questions when active or completed
-	if t.Status == "active" || t.Status == "completed" {
-		qids, _ := GetTournamentQuestions(id)
-		detail.QuestionIDs = qids
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -186,7 +179,6 @@ func HandleJoinTournament(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if filling up triggered an immediate start
 	TryActivateTournamentIfFull(id)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -221,8 +213,8 @@ func HandleLeaveTournament(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "left"})
 }
 
-// POST /api/admin/tournaments/{id}/questions  (admin only)
-// Body: { "question_ids": [2, 5, 8] }
+// POST /api/admin/tournaments/{id}/questions
+// Body: { "question_ids": [2,5,8], "duration_minutes": 90 }
 func HandleAssignTournamentQuestions(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil || !u.IsAdmin {
@@ -236,13 +228,18 @@ func HandleAssignTournamentQuestions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		QuestionIDs []int `json:"question_ids"`
+		QuestionIDs     []int `json:"question_ids"`
+		DurationMinutes int   `json:"duration_minutes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.QuestionIDs) == 0 {
 		http.Error(w, "question_ids required", 400)
 		return
 	}
+	if body.DurationMinutes <= 0 {
+		body.DurationMinutes = 60
+	}
 
+	DB.Exec(`UPDATE tournaments SET duration_minutes=$1 WHERE id=$2`, body.DurationMinutes, id)
 	DB.Exec(`DELETE FROM tournament_questions WHERE tournament_id=$1`, id)
 	for i, qid := range body.QuestionIDs {
 		DB.Exec(`INSERT INTO tournament_questions (tournament_id, question_id, sort_order) VALUES ($1,$2,$3)
@@ -253,14 +250,85 @@ func HandleAssignTournamentQuestions(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
-// POST /api/tournaments/{id}/submit
-// Body: { "question_id": 4, "passed": true }
-func HandleTournamentSubmit(w http.ResponseWriter, r *http.Request) {
+// POST /api/tournaments/{id}/enter
+func HandleTournamentEnter(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil {
 		return
 	}
-	id := parseIDFromPath(r.URL.Path, "/api/tournaments/", "/submit")
+	id := parseIDFromPath(r.URL.Path, "/api/tournaments/", "/enter")
+	if id == 0 {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+
+	t, err := GetTournament(id)
+	if err != nil {
+		http.Error(w, "tournament not found", 404)
+		return
+	}
+	if t.Status != "active" {
+		http.Error(w, "tournament is not active yet", 409)
+		return
+	}
+
+	// Verify participant
+	var joined bool
+	DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2)`,
+		id, u.ID).Scan(&joined)
+	if !joined {
+		http.Error(w, "you are not a participant", 403)
+		return
+	}
+
+	var disqualified bool
+	DB.QueryRow(`SELECT COALESCE(disqualified,FALSE) FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2`,
+		id, u.ID).Scan(&disqualified)
+	if disqualified {
+		http.Error(w, "you have been disqualified from this tournament", 403)
+		return
+	}
+
+	var finished bool
+	DB.QueryRow(`SELECT finished_at IS NOT NULL FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2`,
+		id, u.ID).Scan(&finished)
+	if finished {
+		http.Error(w, "you have already completed this tournament", 409)
+		return
+	}
+
+	endsAt := EndsAt(t.ScheduledAt, t.DurationMinutes)
+	if time.Now().UTC().After(endsAt) {
+		http.Error(w, "tournament time has elapsed", 409)
+		return
+	}
+
+	// Set entered_at (idempotent)
+	DB.Exec(`UPDATE tournament_participants SET entered_at=NOW() WHERE tournament_id=$1 AND user_id=$2 AND entered_at IS NULL`,
+		id, u.ID)
+
+	qs, err := GetTournamentQuestionObjects(id)
+	if err != nil || len(qs) == 0 {
+		http.Error(w, "no questions assigned to this tournament yet", 404)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ArenaEnterResponse{
+		EndsAt:          endsAt.UTC().Format(time.RFC3339),
+		DurationMinutes: t.DurationMinutes,
+		Questions:       qs,
+	})
+}
+
+// POST /api/tournaments/{id}/arena-submit
+// Body: { "question_id": 4, "code": "...", "language": "go" }
+func HandleTournamentArenaSubmit(w http.ResponseWriter, r *http.Request) {
+	u := RequireAuth(w, r)
+	if u == nil {
+		return
+	}
+	id := parseIDFromPath(r.URL.Path, "/api/tournaments/", "/arena-submit")
 	if id == 0 {
 		http.Error(w, "invalid id", 400)
 		return
@@ -276,7 +344,6 @@ func HandleTournamentSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify user is a participant
 	var joined bool
 	DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2)`,
 		id, u.ID).Scan(&joined)
@@ -285,41 +352,107 @@ func HandleTournamentSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reject submissions from disqualified participants
 	var disqualified bool
-	DB.QueryRow(`SELECT COALESCE(disqualified, FALSE) FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2`,
+	DB.QueryRow(`SELECT COALESCE(disqualified,FALSE) FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2`,
 		id, u.ID).Scan(&disqualified)
 	if disqualified {
-		http.Error(w, "you have been disqualified from this tournament", 403)
+		http.Error(w, "you have been disqualified", 403)
+		return
+	}
+
+	var finished bool
+	DB.QueryRow(`SELECT finished_at IS NOT NULL FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2`,
+		id, u.ID).Scan(&finished)
+	if finished {
+		http.Error(w, "you have already completed this tournament", 409)
+		return
+	}
+
+	if time.Now().UTC().After(EndsAt(t.ScheduledAt, t.DurationMinutes)) {
+		http.Error(w, "tournament time has elapsed", 409)
 		return
 	}
 
 	var body struct {
-		QuestionID int  `json:"question_id"`
-		Passed     bool `json:"passed"`
+		QuestionID int    `json:"question_id"`
+		Code       string `json:"code"`
+		Language   string `json:"language"`
 	}
-
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.QuestionID == 0 {
 		http.Error(w, "question_id required", 400)
 		return
 	}
+	if body.Code == "" {
+		http.Error(w, "code required", 400)
+		return
+	}
+	if body.Language == "" {
+		body.Language = "go"
+	}
 
-	_, err = DB.Exec(`
+	var isAssigned bool
+	DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM tournament_questions WHERE tournament_id=$1 AND question_id=$2)`,
+		id, body.QuestionID).Scan(&isAssigned)
+	if !isAssigned {
+		http.Error(w, "question not part of this tournament", 403)
+		return
+	}
+
+	var testCasesJSON, testFile string
+	DB.QueryRow(`SELECT COALESCE(test_cases,'[]'), COALESCE(test_file,'') FROM questions WHERE id=$1`,
+		body.QuestionID).Scan(&testCasesJSON, &testFile)
+
+	var runResult RunResult
+	if body.Language == "go" && strings.TrimSpace(testFile) != "" {
+		runResult = RunTest(body.Code, testFile)
+	} else {
+		var testCases []TestCase
+		if jsonErr := json.Unmarshal([]byte(testCasesJSON), &testCases); jsonErr == nil && len(testCases) > 0 {
+			runResult = RunAgainstTestCases(body.Language, body.Code, testCases)
+		} else {
+			out, runErr := RunCode(body.Language, body.Code, "")
+			runResult = RunResult{Total: 0, Passed: 0, AllPassed: false}
+			if runErr != "" {
+				runResult.Results = []TestResult{{Index: 1, Error: runErr, Passed: false}}
+			} else {
+				runResult.Results = []TestResult{{Index: 1, Got: out, Passed: false,
+					Error: "no test cases defined for this question — output shown above"}}
+			}
+		}
+	}
+
+	passed := runResult.AllPassed
+
+	DB.Exec(`
 		INSERT INTO tournament_submissions (tournament_id, user_id, question_id, passed)
 		VALUES ($1,$2,$3,$4)
 		ON CONFLICT (tournament_id, user_id, question_id)
 		DO UPDATE SET passed = tournament_submissions.passed OR EXCLUDED.passed`,
-		id, u.ID, body.QuestionID, body.Passed)
-	if err != nil {
-		http.Error(w, "db error", 500)
-		return
+		id, u.ID, body.QuestionID, passed)
+
+	var totalQ, solvedQ int
+	DB.QueryRow(`SELECT COUNT(*) FROM tournament_questions WHERE tournament_id=$1`, id).Scan(&totalQ)
+	DB.QueryRow(`SELECT COUNT(*) FROM tournament_submissions WHERE tournament_id=$1 AND user_id=$2 AND passed=TRUE`,
+		id, u.ID).Scan(&solvedQ)
+
+	allDone := totalQ > 0 && solvedQ >= totalQ
+
+	if allDone {
+		DB.Exec(`UPDATE tournament_participants SET finished_at=NOW() WHERE tournament_id=$1 AND user_id=$2 AND finished_at IS NULL`,
+			id, u.ID)
+		TryCompleteTournament(id)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "recorded"})
+	json.NewEncoder(w).Encode(ArenaSubmitResponse{
+		RunResult:    runResult,
+		Passed:       passed,
+		Finished:     allDone,
+		Disqualified: false,
+	})
 }
 
-// GET /api/tournaments/{id}/leaderboard  — public after completion, participants-only while active
+// GET /api/tournaments/{id}/leaderboard
 func HandleTournamentLeaderboard(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil {
@@ -359,7 +492,7 @@ func HandleTournamentLeaderboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DELETE /api/admin/tournaments/{id}  (admin only)
+// DELETE /api/admin/tournaments/{id}
 func HandleDeleteTournament(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil || !u.IsAdmin {
@@ -379,7 +512,6 @@ func HandleDeleteTournament(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/tournaments/{id}/violation
-// Body: { "type": "copy_paste" | "tab_switch" | "logout" }
 func HandleTournamentViolation(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil {
@@ -401,7 +533,6 @@ func HandleTournamentViolation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify participant
 	var joined bool
 	DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM tournament_participants WHERE tournament_id=$1 AND user_id=$2)`,
 		id, u.ID).Scan(&joined)
@@ -418,17 +549,16 @@ func HandleTournamentViolation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Logout/close = immediate disqualification
 	if body.Type == "logout" {
 		DB.Exec(`UPDATE tournament_participants
-			SET disqualified=TRUE, disqualified_at=NOW()
+			SET disqualified=TRUE, disqualified_at=NOW(), finished_at=NOW()
 			WHERE tournament_id=$1 AND user_id=$2`, id, u.ID)
+		TryCompleteTournament(id)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"disqualified": true, "violation_count": 2})
 		return
 	}
 
-	// Increment violation count; disqualify on 2nd
 	var newCount int
 	DB.QueryRow(`
 		UPDATE tournament_participants
@@ -439,8 +569,9 @@ func HandleTournamentViolation(w http.ResponseWriter, r *http.Request) {
 	disqualified := newCount >= 2
 	if disqualified {
 		DB.Exec(`UPDATE tournament_participants
-			SET disqualified=TRUE, disqualified_at=NOW()
+			SET disqualified=TRUE, disqualified_at=NOW(), finished_at=NOW()
 			WHERE tournament_id=$1 AND user_id=$2`, id, u.ID)
+		TryCompleteTournament(id)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

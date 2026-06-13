@@ -1,6 +1,6 @@
 // ── Tournaments ───────────────────────────────────────────────────────────────
 
-var _activeTournamentID = null;
+var _activeTournamentArena = null; // { id, endsAt, questions }
 
 // ── Badge helpers ─────────────────────────────────────────────────────────────
 
@@ -27,33 +27,27 @@ function _markTournamentsSeen(ids) {
   localStorage.setItem(_tSeenKey(), JSON.stringify(seen));
 }
 
-// Called once on enterApp — lights the badge if:
-//   - user is a participant in a tournament they haven't seen yet, OR
-//   - any new upcoming tournament exists that hasn't been seen.
-// Never auto-opens any arena popup.
 async function initTournamentBadge() {
   try {
     var res = await apiFetch('/api/tournaments');
     if (!res.ok) return;
     var tournaments = await res.json();
     if (!tournaments.length) return;
-
     var seen = _getSeenTournaments();
     var hasUnseen = tournaments.some(function(t) {
-      // Participants see badge for any unseen tournament they're in
-      // Non-participants see badge for new upcoming tournaments
       return seen.indexOf(t.id) === -1 && (t.is_joined || t.status === 'upcoming');
     });
     if (hasUnseen) showTournamentBadge();
   } catch(e) {}
 }
 
-// ── Entry point (called when user clicks the Tournaments tab) ─────────────────
-
 async function initTournamentsTab() {
   hideTournamentBadge();
+  if (_activeTournamentArena) {
+    _renderTournamentArenaView(_activeTournamentArena.id, _activeTournamentArena.questions, _activeTournamentArena.endsAt);
+    return;
+  }
   await loadTournamentList();
-  // Mark all visible tournaments as seen
   try {
     var res2 = await apiFetch('/api/tournaments');
     if (res2.ok) {
@@ -61,7 +55,6 @@ async function initTournamentsTab() {
       _markTournamentsSeen(all.map(function(t) { return t.id; }));
     }
   } catch(e) {}
-  // No auto-arena here — user clicks "Enter Arena" on the card themselves
 }
 
 // ── Load & render tournament list ─────────────────────────────────────────────
@@ -97,9 +90,10 @@ async function loadTournamentList() {
 }
 
 function renderTournamentCard(t) {
-  var time     = new Date(t.scheduled_at).toLocaleString();
+  var time      = new Date(t.scheduled_at).toLocaleString();
   var spotsLeft = t.max_participants - t.participant_count;
   var full      = spotsLeft <= 0;
+  var dur       = t.duration_minutes || 60;
 
   var statusBadge = '<span class="status-badge status-' + t.status + '">' + t.status + '</span>';
 
@@ -133,7 +127,7 @@ function renderTournamentCard(t) {
       statusBadge +
     '</div>' +
     (t.description ? '<p class="tournament-desc">' + escHtml(t.description) + '</p>' : '') +
-    '<div class="tournament-meta">📅 ' + escHtml(time) + ' &nbsp;·&nbsp; ⏱️ 1 hour</div>' +
+    '<div class="tournament-meta">📅 ' + escHtml(time) + ' &nbsp;·&nbsp; ⏱️ ' + dur + ' min</div>' +
     participantBar +
     (actions ? '<div class="tournament-actions">' + actions + '</div>' : '') +
   '</div>';
@@ -142,13 +136,9 @@ function renderTournamentCard(t) {
 // ── Join / Leave ──────────────────────────────────────────────────────────────
 
 function joinTournament(id) {
-  var card = document.getElementById('tournament-' + id);
-  var timeText = card ? card.querySelector('.tournament-meta') : null;
-  var scheduledLabel = timeText ? timeText.textContent.replace('📅', '').replace('⏱️ 1 hour', '').replace('·', '').trim() : '';
-
   showConfirmModal(
     '📅 Join Tournament?',
-    scheduledLabel ? 'This tournament starts on <strong>' + escHtml(scheduledLabel) + '</strong> and lasts 1 hour.<br>Make sure you have no challenges or other tournaments scheduled at that time.' : 'Make sure you have no other contests scheduled at that time.',
+    'Make sure you have no other contests scheduled at that time.',
     'Join',
     async function() {
       try {
@@ -174,32 +164,47 @@ async function leaveTournament(id) {
   } catch(e) { showToast('Network error.', 'error'); }
 }
 
-// ── Enter arena ───────────────────────────────────────────────────────────────
+// ── Enter Arena ───────────────────────────────────────────────────────────────
 
 async function enterTournamentArena(id) {
   try {
-    var res = await apiFetch('/api/tournaments/' + id);
-    if (!res.ok) { showToast('Could not load tournament.', 'error'); return; }
-    var detail = await res.json();
-    _activeTournamentID = id;
-
-    if (detail.status === 'active') {
-      showTournamentArena(id, detail.question_ids || [], detail.scheduled_at);
-    } else {
-      ContestTimer.schedule('tournament', id, detail.scheduled_at, detail.question_ids || [], {
-        onStart: function(qids) { showTournamentArena(id, qids, detail.scheduled_at); },
-        onEnd:   function()     { onTournamentEnd({ tournament_id: id }); }
-      });
-      showToast('Tournament starts at ' + new Date(detail.scheduled_at).toLocaleTimeString());
+    var res = await apiFetch('/api/tournaments/' + id + '/enter', { method: 'POST' });
+    if (!res.ok) {
+      var errText = await res.text();
+      showToast(errText.trim() || 'Could not enter arena.', 'error');
+      return;
     }
+    var data = await res.json();
+
+    _activeTournamentArena = { id: id, endsAt: data.ends_at, questions: data.questions };
+
+    _renderTournamentArenaView(id, data.questions, data.ends_at);
   } catch(e) { showToast('Network error.', 'error'); }
 }
 
-function showTournamentArena(tournamentID, questionIDs, scheduledAt) {
-  if (typeof switchTab === 'function') switchTab('questions');
-  if (typeof enterContestMode === 'function') {
-    enterContestMode('tournament', tournamentID, questionIDs, scheduledAt);
-  }
+function _renderTournamentArenaView(tournamentId, questions, endsAt) {
+  var container = document.getElementById('tournament-list');
+  if (!container) return;
+
+  container.innerHTML = _buildArenaHTML('tournament', tournamentId, questions, endsAt);
+
+  if (typeof AntiCheat !== 'undefined') AntiCheat.start('tournament', tournamentId);
+
+  ContestTimer.resume('tournament', tournamentId, endsAt, {
+    onEnd: function() { _exitTournamentArena('Time\'s up! Tournament ended for you.'); }
+  });
+
+  _initArenaQuestionList('tournament', tournamentId, questions);
+}
+
+function _exitTournamentArena(message) {
+  if (typeof AntiCheat !== 'undefined') AntiCheat.stop();
+  ContestTimer.clear();
+  _activeTournamentArena = null;
+  if (message) showToast(message);
+  var dqModal = document.getElementById('dq-modal');
+  if (dqModal) dqModal.remove();
+  loadTournamentList();
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
@@ -252,20 +257,21 @@ function showLeaderboardModal(data) {
 // ── Notification handlers ─────────────────────────────────────────────────────
 
 onTournamentStart = function(p) {
-  showToast('🚀 Tournament #' + p.tournament_id + ' has started! Get ready!');
-  // Auto-enter because the live event just fired — intentional
-  enterTournamentArena(p.tournament_id);
+  showToast('🚀 Tournament #' + p.tournament_id + ' has started! Click Enter Arena when ready.');
+  showTournamentBadge();
+  loadTournamentList();
 };
 
 onTournamentEnd = function(p) {
-  ContestTimer.clear();
-  showToast('⏱️ Tournament over! Loading results…');
-  if (typeof exitContestMode === 'function') exitContestMode();
-  // Light badge so user knows there's a result
-  showTournamentBadge();
+  if (_activeTournamentArena && _activeTournamentArena.id === p.tournament_id) {
+    _exitTournamentArena('⏱️ Tournament over! Loading results…');
+  } else {
+    ContestTimer.clear();
+    showTournamentBadge();
+    loadTournamentList();
+  }
   setTimeout(function() {
     if (p.tournament_id) viewTournamentLeaderboard(p.tournament_id);
-    loadTournamentList();
   }, 1500);
 };
 
@@ -339,7 +345,7 @@ async function submitCreateTournament() {
   }
 }
 
-// ── Shared assign-questions modal (used by both challenges and tournaments) ───
+// ── Shared assign-questions modal ─────────────────────────────────────────────
 
 async function openAssignQuestionsModal(type, id) {
   var existing = document.getElementById('assign-q-modal');
@@ -365,6 +371,10 @@ async function openAssignQuestionsModal(type, id) {
       '<h3>Assign Questions — ' + (type === 'challenge' ? 'Challenge' : 'Tournament') + ' #' + id + '</h3>' +
       '<p class="modal-hint">Select the questions participants will solve. Order follows selection sequence.</p>' +
       '<div class="assign-q-list">' + checkboxes + '</div>' +
+      '<div style="margin-top:16px">' +
+        '<label class="form-label">Duration (minutes)</label>' +
+        '<input type="number" id="assign-duration" class="form-input" value="60" min="5" max="480" style="width:120px">' +
+      '</div>' +
       '<div id="assign-q-error" class="error-text" style="display:none"></div>' +
       '<div class="modal-actions">' +
         '<button class="btn btn-primary" onclick="submitAssignQuestions(\'' + type + '\',' + id + ')">Save</button>' +
@@ -377,6 +387,7 @@ async function openAssignQuestionsModal(type, id) {
 async function submitAssignQuestions(type, id) {
   var checked = Array.from(document.querySelectorAll('.assign-q-cb:checked'))
                      .map(function(cb) { return parseInt(cb.value); });
+  var duration = parseInt(document.getElementById('assign-duration').value) || 60;
   var errEl = document.getElementById('assign-q-error');
   errEl.style.display = 'none';
 
@@ -394,7 +405,7 @@ async function submitAssignQuestions(type, id) {
     var res = await apiFetch(endpoint, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ question_ids: checked })
+      body: JSON.stringify({ question_ids: checked, duration_minutes: duration })
     });
     if (!res.ok) {
       errEl.textContent = 'Failed to assign questions.';
@@ -402,7 +413,7 @@ async function submitAssignQuestions(type, id) {
       return;
     }
     document.getElementById('assign-q-modal').remove();
-    showToast('Questions assigned! ✅');
+    showToast('Questions assigned! ✅ Duration: ' + duration + ' min');
   } catch(e) {
     errEl.textContent = 'Network error.';
     errEl.style.display = 'block';

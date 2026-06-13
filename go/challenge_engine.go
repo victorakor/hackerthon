@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-// StartContestEngine launches a background goroutine that ticks every 30 seconds
-// and transitions challenges/tournaments between states automatically.
 func StartContestEngine() {
 	go func() {
 		ticker := time.NewTicker(30 * time.Second)
@@ -42,11 +40,15 @@ func tickChallenges() {
 		activateChallenge(id, challengerID, opponentID)
 	}
 
-	// 2. active challenges whose scheduled_at + 1 hour has passed → complete
+	// 2. active challenges whose time has elapsed OR both participants finished → complete
 	rows2, err := DB.Query(`
 		SELECT id, challenger_id, opponent_id
 		FROM challenges
-		WHERE status = 'active' AND scheduled_at + INTERVAL '1 hour' <= $1`, now)
+		WHERE status = 'active'
+		AND (
+			scheduled_at + (COALESCE(duration_minutes,60) * interval '1 minute') <= $1
+			OR (challenger_finished_at IS NOT NULL AND opponent_finished_at IS NOT NULL)
+		)`, now)
 	if err != nil {
 		log.Printf("contest engine: query active challenges: %v", err)
 		return
@@ -60,6 +62,10 @@ func tickChallenges() {
 }
 
 func activateChallenge(id, challengerID, opponentID int) {
+	// Fetch duration for the notification payload
+	var durationMinutes int
+	DB.QueryRow(`SELECT COALESCE(duration_minutes,60) FROM challenges WHERE id=$1`, id).Scan(&durationMinutes)
+
 	_, err := DB.Exec(`UPDATE challenges SET status='active' WHERE id=$1`, id)
 	if err != nil {
 		log.Printf("contest engine: activate challenge %d: %v", id, err)
@@ -69,7 +75,7 @@ func activateChallenge(id, challengerID, opponentID int) {
 
 	payload, _ := json.Marshal(map[string]interface{}{
 		"challenge_id": id,
-		"duration_min": 60,
+		"duration_min": durationMinutes,
 	})
 	p := string(payload)
 	CreateNotification(challengerID, "contest_start", p)
@@ -77,6 +83,10 @@ func activateChallenge(id, challengerID, opponentID int) {
 }
 
 func completeChallenge(id, challengerID, opponentID int) {
+	// Ensure both participants have finished_at set (frees cooldown for timeout case)
+	DB.Exec(`UPDATE challenges SET challenger_finished_at=NOW() WHERE id=$1 AND challenger_finished_at IS NULL`, id)
+	DB.Exec(`UPDATE challenges SET opponent_finished_at=NOW() WHERE id=$1 AND opponent_finished_at IS NULL`, id)
+
 	cScore, _ := CountChallengeScore(id, challengerID)
 	oScore, _ := CountChallengeScore(id, opponentID)
 
@@ -87,7 +97,7 @@ func completeChallenge(id, challengerID, opponentID int) {
 	case oScore > cScore:
 		winnerID = opponentID
 	default:
-		winnerID = 0 // tie
+		winnerID = 0
 	}
 
 	_, err := DB.Exec(`
@@ -114,6 +124,17 @@ func completeChallenge(id, challengerID, opponentID int) {
 	CreateNotification(opponentID, "contest_end", p)
 }
 
+// TryCompleteChallenge checks if both participants are done and completes early.
+func TryCompleteChallenge(challengeID, challengerID, opponentID int) {
+	var bothDone bool
+	DB.QueryRow(`
+		SELECT challenger_finished_at IS NOT NULL AND opponent_finished_at IS NOT NULL
+		FROM challenges WHERE id=$1`, challengeID).Scan(&bothDone)
+	if bothDone {
+		completeChallenge(challengeID, challengerID, opponentID)
+	}
+}
+
 // ── Tournaments ───────────────────────────────────────────────────────────────
 
 func tickTournaments() {
@@ -134,10 +155,17 @@ func tickTournaments() {
 		activateTournament(id)
 	}
 
-	// 2. active tournaments past scheduled_at + 1 hour → complete
+	// 2. active tournaments past duration OR all participants finished → complete
 	rows2, err := DB.Query(`
 		SELECT id FROM tournaments
-		WHERE status = 'active' AND scheduled_at + INTERVAL '1 hour' <= $1`, now)
+		WHERE status = 'active'
+		AND (
+			scheduled_at + (COALESCE(duration_minutes,60) * interval '1 minute') <= $1
+			OR NOT EXISTS (
+				SELECT 1 FROM tournament_participants
+				WHERE tournament_id = tournaments.id AND finished_at IS NULL
+			)
+		)`, now)
 	if err != nil {
 		log.Printf("contest engine: query active tournaments: %v", err)
 		return
@@ -151,6 +179,9 @@ func tickTournaments() {
 }
 
 func activateTournament(id int) {
+	var durationMinutes int
+	DB.QueryRow(`SELECT COALESCE(duration_minutes,60) FROM tournaments WHERE id=$1`, id).Scan(&durationMinutes)
+
 	_, err := DB.Exec(`UPDATE tournaments SET status='active' WHERE id=$1`, id)
 	if err != nil {
 		log.Printf("contest engine: activate tournament %d: %v", id, err)
@@ -159,11 +190,14 @@ func activateTournament(id int) {
 	log.Printf("contest engine: tournament %d now active", id)
 	notifyTournamentParticipants(id, "tournament_start", map[string]interface{}{
 		"tournament_id": id,
-		"duration_min":  60,
+		"duration_min":  durationMinutes,
 	})
 }
 
 func completeTournament(id int) {
+	// Ensure all participants have finished_at (frees cooldown)
+	DB.Exec(`UPDATE tournament_participants SET finished_at=NOW() WHERE tournament_id=$1 AND finished_at IS NULL`, id)
+
 	_, err := DB.Exec(`UPDATE tournaments SET status='completed' WHERE id=$1`, id)
 	if err != nil {
 		log.Printf("contest engine: complete tournament %d: %v", id, err)
@@ -173,6 +207,18 @@ func completeTournament(id int) {
 	notifyTournamentParticipants(id, "tournament_end", map[string]interface{}{
 		"tournament_id": id,
 	})
+}
+
+// TryCompleteTournament checks if all participants are done and completes early.
+func TryCompleteTournament(tournamentID int) {
+	var anyActive bool
+	DB.QueryRow(`
+		SELECT EXISTS(SELECT 1 FROM tournament_participants
+		             WHERE tournament_id=$1 AND finished_at IS NULL)`,
+		tournamentID).Scan(&anyActive)
+	if !anyActive {
+		completeTournament(tournamentID)
+	}
 }
 
 func notifyTournamentParticipants(tournamentID int, kind string, data map[string]interface{}) {
@@ -194,9 +240,6 @@ func notifyTournamentParticipants(tournamentID int, kind string, data map[string
 	}
 }
 
-// TryActivateTournamentIfFull is called by the join handler.
-// If the tournament just hit max_participants, activate it immediately
-// (only if scheduled_at has also already passed; otherwise the ticker handles it).
 func TryActivateTournamentIfFull(tournamentID int) {
 	t, err := GetTournament(tournamentID)
 	if err != nil || t.Status != "upcoming" {
@@ -209,20 +252,19 @@ func TryActivateTournamentIfFull(tournamentID int) {
 	if count >= t.MaxParticipants && time.Now().UTC().After(t.ScheduledAt) {
 		activateTournament(tournamentID)
 	} else if count >= t.MaxParticipants {
-		// Full but not yet time — log it, ticker will start at scheduled_at
 		log.Printf("contest engine: tournament %d is full (%d/%d), waiting for scheduled time %s",
 			tournamentID, count, t.MaxParticipants, t.ScheduledAt.Format(time.RFC3339))
 	}
 }
 
-// EndsAt returns the time a contest ends given its scheduled start.
-func EndsAt(scheduledAt time.Time) time.Time {
-	return scheduledAt.Add(time.Hour)
+// EndsAt returns the time a contest ends given its scheduled start and duration.
+func EndsAt(scheduledAt time.Time, durationMinutes int) time.Time {
+	return scheduledAt.Add(time.Duration(durationMinutes) * time.Minute)
 }
 
 // SecondsRemaining returns seconds left in an active contest, or 0 if over.
-func SecondsRemaining(scheduledAt time.Time) int {
-	remaining := time.Until(EndsAt(scheduledAt)).Seconds()
+func SecondsRemaining(scheduledAt time.Time, durationMinutes int) int {
+	remaining := time.Until(EndsAt(scheduledAt, durationMinutes)).Seconds()
 	if remaining < 0 {
 		return 0
 	}
@@ -230,13 +272,13 @@ func SecondsRemaining(scheduledAt time.Time) int {
 }
 
 // FormatContestPayload builds the JSON payload sent to the frontend on contest_start.
-func FormatContestPayload(contestType string, id int, scheduledAt time.Time, questionIDs []int) string {
+func FormatContestPayload(contestType string, id int, scheduledAt time.Time, durationMinutes int, questionIDs []int) string {
 	b, _ := json.Marshal(map[string]interface{}{
-		"type":         contestType, // "challenge" | "tournament"
+		"type":         contestType,
 		"id":           id,
-		"ends_at":      EndsAt(scheduledAt).UTC().Format(time.RFC3339),
+		"ends_at":      EndsAt(scheduledAt, durationMinutes).UTC().Format(time.RFC3339),
 		"question_ids": questionIDs,
-		"duration_min": 60,
+		"duration_min": durationMinutes,
 	})
 	return fmt.Sprintf("%s", b)
 }
