@@ -1181,3 +1181,123 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 .clan-browser {
   max-width: 860px;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ARENA PANEL — shared by challenge/tournament arena AND raid arena
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.arena-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 0;
+  min-height: calc(100vh - 280px);
+}
+
+.arena-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.arena-title {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 1px;
+  flex: 1;
+}
+
+.arena-body {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  align-items: start;
+  flex: 1;
+}
+
+.arena-q-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: calc(100vh - 360px);
+  padding-right: 4px;
+}
+
+.arena-q-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: transparent;
+}
+
+.arena-q-item:hover {
+  border-color: var(--accent);
+  background: rgba(255,255,255,0.03);
+}
+
+.arena-q-item.active {
+  border-color: var(--accent);
+  background: rgba(0, 212, 255, 0.06);
+}
+
+.arena-q-item.active .q-num {
+  background: var(--accent);
+}
+
+.arena-q-item.completed .q-num {
+  background: var(--accent2, #00cc88);
+}
+
+.arena-q-status {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.arena-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.arena-hint-text {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: center;
+  margin-top: 60px;
+}
+
+/* badge-solved — used in both arena and raid arena */
+.badge-solved {
+  border-color: var(--accent2, #00cc88);
+  color: var(--accent2, #00cc88);
+}
+
+/* ── Raid arena overrides ───────────────────────────────────────────────── */
+
+.raid-arena-panel {
+  padding-top: 0;
+}
+
+.raid-arena-panel .arena-header {
+  flex-wrap: wrap;
+}
+
+/* Narrow the question list slightly to give more room to scoreboard */
+.raid-arena-panel .arena-body {
+  grid-template-columns: 260px 1fr;
+}
