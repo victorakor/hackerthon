@@ -36,4 +36,5 @@ async function enterApp() {
   // Restore alert badges (without popping up any arenas)
   initChallengeBadge();
   initTournamentBadge();
+  initClanBadge();
 }

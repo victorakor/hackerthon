@@ -149,5 +149,63 @@ func RegisterRoutes() {
 		}
 	}))
 
+	// ── Clans ─────────────────────────────────────────────────────────────────
+	http.HandleFunc("/api/clans", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			HandleCreateClan(w, r)
+		} else {
+			HandleListClans(w, r)
+		}
+	}))
+	http.HandleFunc("/api/clans/", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/join"):
+			HandleJoinClan(w, r)
+		case strings.HasSuffix(path, "/leave"):
+			HandleLeaveClan(w, r)
+		case path == "/api/clans/leaderboard":
+			HandleClanLeaderboard(w, r)
+		case path == "/api/clans/mine":
+			HandleMyClan(w, r)
+		case strings.HasSuffix(path, "/chat"):
+			if r.Method == http.MethodPost {
+				HandleSendClanMessage(w, r)
+			} else {
+				HandleGetClanChat(w, r)
+			}
+		case strings.HasSuffix(path, "/react"):
+			if r.Method == http.MethodDelete {
+				HandleRemoveReaction(w, r)
+			} else {
+				HandleAddReaction(w, r)
+			}
+		default:
+			HandleGetClan(w, r)
+		}
+	}))
+
+	// ── Raids ──────────────────────────────────────────────────────────────────
+	http.HandleFunc("/api/raids", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			HandleCreateRaid(w, r)
+		} else {
+			HandleListRaids(w, r)
+		}
+	}))
+	http.HandleFunc("/api/raids/", WithCORS(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/enter"):
+			HandleRaidEnter(w, r)
+		case strings.HasSuffix(path, "/arena-submit"):
+			HandleRaidArenaSubmit(w, r)
+		case strings.HasSuffix(path, "/leaderboard"):
+			HandleRaidLeaderboard(w, r)
+		default:
+			HandleGetRaid(w, r)
+		}
+	}))
+
 	log.Printf("Routes registered — server starting at %s", time.Now().Format(time.RFC3339))
 }

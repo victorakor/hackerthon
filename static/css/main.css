@@ -444,3 +444,732 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
   color: var(--accent, #7c6fff);
   text-decoration: underline;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CLAN BATTLE STYLES
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Clan Browser ─────────────────────────────────────────────────────────── */
+
+.clan-browser-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.clan-browser-title {
+  margin: 0 0 4px 0;
+}
+
+.clan-browser-sub {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.clan-loading, .clan-empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 24px;
+  font-size: 13px;
+}
+
+.btn-clan-create, .btn-clan-join, .btn-clan-leave, .btn-clan-send {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-clan-create:hover, .btn-clan-join:hover, .btn-clan-send:hover {
+  opacity: 0.88;
+}
+
+.btn-clan-leave {
+  background: var(--hard);
+}
+
+/* ── Clan Card (list item) ───────────────────────────────────────────────── */
+
+.clan-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.clan-card:hover {
+  border-color: var(--accent);
+  background: var(--surface-hover, rgba(255,255,255,0.03));
+}
+
+.clan-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.clan-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.clan-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.clan-desc {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+.clan-card-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.clan-rating, .clan-members {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.clan-tag {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+/* ── Clan Modal (create / detail) ────────────────────────────────────────── */
+
+.clan-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.clan-modal {
+  background: var(--bg-card, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  width: 92%;
+  max-width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.clan-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.clan-modal-header h3 {
+  margin: 0;
+}
+
+.clan-modal-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.clan-modal-close:hover {
+  color: var(--text);
+}
+
+.clan-modal-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.clan-modal-name {
+  font-weight: 700;
+  font-size: 16px;
+  margin-left: 8px;
+}
+
+.clan-modal-desc {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.clan-modal-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.clan-already-member {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Clan Create Form ─────────────────────────────────────────────────────── */
+
+.clan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.clan-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.clan-form input, .clan-form textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.clan-form input:focus, .clan-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.clan-form-error {
+  color: var(--hard);
+  font-size: 12px;
+  background: rgba(255,80,80,0.08);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+/* ── My Clan View ─────────────────────────────────────────────────────────── */
+
+.my-clan-header {
+  margin-bottom: 16px;
+}
+
+.my-clan-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.my-clan-name {
+  margin: 0;
+}
+
+.my-clan-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.my-clan-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.clan-inner-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clan-inner-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.clan-inner-panel {
+  min-height: 200px;
+}
+
+/* ── Role Badges ──────────────────────────────────────────────────────────── */
+
+.clan-role-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.clan-role-badge.clanhead {
+  background: rgba(255, 200, 0, 0.18);
+  color: #ffc800;
+}
+
+.clan-role-badge.general {
+  background: rgba(120, 180, 255, 0.18);
+  color: #78b4ff;
+}
+
+.clan-role-badge.member {
+  background: rgba(160, 160, 160, 0.15);
+  color: var(--muted);
+}
+
+/* ── Members Panel ────────────────────────────────────────────────────────── */
+
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.clan-member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.member-name {
+  font-weight: 600;
+  flex: 1;
+}
+
+.member-joined {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.members-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CLAN CHAT
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.clan-chat {
+  display: flex;
+  flex-direction: column;
+  height: 480px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.clan-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clan-msg {
+  max-width: 80%;
+  background: var(--bg-card, rgba(255,255,255,0.04));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  align-self: flex-start;
+}
+
+.clan-msg-me {
+  align-self: flex-end;
+  background: rgba(var(--accent-rgb, 90, 130, 255), 0.12);
+  border-color: var(--accent);
+}
+
+.clan-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.clan-msg-author {
+  font-weight: 700;
+}
+
+.clan-msg-time {
+  color: var(--muted);
+  margin-left: auto;
+}
+
+.clan-msg-content {
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.clan-code-block {
+  background: rgba(0,0,0,0.35);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 6px 0;
+  white-space: pre;
+}
+
+.clan-inline-code {
+  background: rgba(0,0,0,0.3);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.clan-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.clan-reactions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.clan-reaction-pill {
+  font-size: 11px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1px 7px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.clan-reaction-pill.reacted {
+  border-color: var(--accent);
+  background: rgba(var(--accent-rgb, 90, 130, 255), 0.18);
+}
+
+.clan-reaction-picker {
+  position: relative;
+}
+
+.clan-reaction-add {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 11px;
+  padding: 1px 7px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.clan-reaction-options {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  display: inline-flex;
+  gap: 4px;
+  background: var(--bg-card, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.clan-reaction-options span {
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+}
+
+.clan-reaction-options span:hover {
+  transform: scale(1.2);
+}
+
+.clan-chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.clan-chat-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+}
+
+.clan-chat-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RAIDS
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.raids-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.raids-header h3 {
+  margin: 0;
+}
+
+.raid-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.raid-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.raid-initiator {
+  font-weight: 700;
+}
+
+.raid-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: auto;
+}
+
+.raid-upcoming {
+  background: rgba(255, 200, 0, 0.15);
+  color: #ffc800;
+}
+
+.raid-active {
+  background: rgba(255, 90, 90, 0.15);
+  color: #ff5a5a;
+  animation: raid-pulse 1.5s infinite;
+}
+
+@keyframes raid-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.raid-completed {
+  background: rgba(120, 220, 140, 0.15);
+  color: #78dc8c;
+}
+
+.raid-card-meta {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.raid-clans-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.raid-clan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+}
+
+.raid-clan-row.raid-clan-mine {
+  background: rgba(var(--accent-rgb, 90, 130, 255), 0.12);
+  border: 1px solid var(--accent);
+}
+
+.raid-clan-rank {
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 24px;
+}
+
+.raid-clan-name {
+  flex: 1;
+  font-weight: 600;
+}
+
+.raid-clan-score {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.raid-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.raid-countdown {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.raid-form-note {
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 200, 0, 0.08);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0;
+}
+
+.raid-target-clans {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.raid-target-clan-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.raid-target-rating {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RAID ARENA
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.raid-arena-panel .arena-header {
+  flex-wrap: wrap;
+}
+
+.raid-scoreboard {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  background: rgba(255,255,255,0.02);
+}
+
+.raid-scoreboard-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.raid-scoreboard-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.raid-scoreboard-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+}
+
+.raid-scoreboard-row.raid-clan-mine {
+  background: rgba(var(--accent-rgb, 90, 130, 255), 0.15);
+  border: 1px solid var(--accent);
+}

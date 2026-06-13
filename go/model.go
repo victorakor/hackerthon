@@ -169,3 +169,88 @@ type Notification struct {
 	Read      bool      `json:"read"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+
+// ── Clan models ───────────────────────────────────────────────────────────────
+
+type Clan struct {
+	ID          int       `json:"id"`
+	Name        string    `json:"name"`
+	Tag         string    `json:"tag"`
+	Description string    `json:"description"`
+	Rating      int       `json:"rating"`
+	CreatedBy   int       `json:"created_by"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type ClanMember struct {
+	ClanID   int       `json:"clan_id"`
+	UserID   int       `json:"user_id"`
+	UserName string    `json:"user_name"`
+	Role     string    `json:"role"` // "clanhead" | "general" | "member"
+	JoinedAt time.Time `json:"joined_at"`
+}
+
+type ClanMessage struct {
+	ID        int                    `json:"id"`
+	ClanID    int                    `json:"clan_id"`
+	UserID    int                    `json:"user_id"`
+	UserName  string                 `json:"user_name"`
+	Role      string                 `json:"role"`
+	Content   string                 `json:"content"`
+	Reactions []ClanMessageReaction  `json:"reactions"`
+	CreatedAt time.Time              `json:"created_at"`
+}
+
+type ClanMessageReaction struct {
+	Emoji   string `json:"emoji"`
+	Count   int    `json:"count"`
+	Reacted bool   `json:"reacted"` // true if the requesting user reacted
+}
+
+type ClanDetail struct {
+	Clan
+	Members     []ClanMember  `json:"members"`
+	MemberCount int           `json:"member_count"`
+	MyRole      string        `json:"my_role"` // "" if not a member
+}
+
+// ── Raid models ───────────────────────────────────────────────────────────────
+
+type Raid struct {
+	ID               int       `json:"id"`
+	InitiatingClanID int       `json:"initiating_clan_id"`
+	ScheduledAt      time.Time `json:"scheduled_at"`
+	Status           string    `json:"status"` // "upcoming" | "active" | "completed"
+	QuestionCount    int       `json:"question_count"`
+	DurationMinutes  int       `json:"duration_minutes"`
+	CreatedBy        int       `json:"created_by"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+type RaidClanScore struct {
+	ClanID   int    `json:"clan_id"`
+	ClanName string `json:"clan_name"`
+	Score    int    `json:"score"`
+	Rank     int    `json:"rank"`
+}
+
+type RaidDetail struct {
+	Raid
+	InitiatingClanName string          `json:"initiating_clan_name"`
+	Clans              []RaidClanScore `json:"clans"`
+	EndsAt             string          `json:"ends_at,omitempty"`
+}
+
+type RaidArenaResponse struct {
+	EndsAt          string          `json:"ends_at"`
+	DurationMinutes int             `json:"duration_minutes"`
+	Questions       []Question      `json:"questions"`
+	ClanScores      []RaidClanScore `json:"clan_scores"`
+}
+
+type RaidSubmitResponse struct {
+	RunResult  RunResult       `json:"run_result"`
+	Passed     bool            `json:"passed"`
+	ClanScores []RaidClanScore `json:"clan_scores"`
+}

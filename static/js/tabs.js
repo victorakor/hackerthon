@@ -8,4 +8,5 @@ function switchTab(name) {
   if (name === 'admin') loadAdminPanel();
   if (name === 'challenges') initChallengesTab();
   if (name === 'tournaments') initTournamentsTab();
+  if (name === 'clans') initClanTab();
 }

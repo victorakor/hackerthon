@@ -189,6 +189,90 @@ func createTables() error {
 	if err != nil {
 		return fmt.Errorf("creating notifications table: %w", err)
 	}
+	// ── Clan tables ───────────────────────────────────────────────────────────
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS clans (
+			id          SERIAL PRIMARY KEY,
+			name        TEXT NOT NULL UNIQUE,
+			tag         TEXT NOT NULL UNIQUE,
+			description TEXT NOT NULL DEFAULT '',
+			rating      INT  NOT NULL DEFAULT 1000,
+			created_by  INT  NOT NULL REFERENCES users(id),
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS clan_members (
+			clan_id   INT NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+			user_id   INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			role      TEXT NOT NULL DEFAULT 'member',
+			joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			PRIMARY KEY (clan_id, user_id),
+			CONSTRAINT one_clan_per_user UNIQUE (user_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS clan_messages (
+			id         SERIAL PRIMARY KEY,
+			clan_id    INT  NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+			user_id    INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			content    TEXT NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+
+		CREATE TABLE IF NOT EXISTS clan_message_reactions (
+			message_id INT  NOT NULL REFERENCES clan_messages(id) ON DELETE CASCADE,
+			user_id    INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			emoji      TEXT NOT NULL,
+			PRIMARY KEY (message_id, user_id, emoji)
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("creating clan tables: %w", err)
+	}
+
+	// ── Raid tables ───────────────────────────────────────────────────────────
+	_, err = DB.Exec(`
+		CREATE TABLE IF NOT EXISTS raids (
+			id                  SERIAL PRIMARY KEY,
+			initiating_clan_id  INT  NOT NULL REFERENCES clans(id),
+			scheduled_at        TIMESTAMPTZ NOT NULL,
+			status              TEXT NOT NULL DEFAULT 'upcoming',
+			question_count      INT  NOT NULL DEFAULT 0,
+			duration_minutes    INT  NOT NULL DEFAULT 0,
+			created_by          INT  NOT NULL REFERENCES users(id),
+			created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			CONSTRAINT raids_status_check
+				CHECK (status IN ('upcoming','active','completed'))
+		);
+
+		CREATE TABLE IF NOT EXISTS raid_clans (
+			raid_id  INT NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+			clan_id  INT NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+			score    INT NOT NULL DEFAULT 0,
+			rank     INT,
+			PRIMARY KEY (raid_id, clan_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS raid_questions (
+			raid_id     INT NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+			question_id INT NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+			sort_order  INT NOT NULL DEFAULT 0,
+			PRIMARY KEY (raid_id, question_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS raid_submissions (
+			id           SERIAL PRIMARY KEY,
+			raid_id      INT NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+			clan_id      INT NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+			user_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			question_id  INT NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+			passed       BOOLEAN NOT NULL DEFAULT FALSE,
+			submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (raid_id, user_id, question_id)
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("creating raid tables: %w", err)
+	}
 
 	// ── Migrations for existing DBs ───────────────────────────────────────────
 	DB.Exec(`ALTER TABLE questions ADD COLUMN IF NOT EXISTS visible BOOLEAN NOT NULL DEFAULT FALSE`)
@@ -228,6 +312,73 @@ func createTables() error {
 	DB.Exec(`ALTER TABLE tournaments ADD COLUMN IF NOT EXISTS duration_minutes INTEGER NOT NULL DEFAULT 60`)
 	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS entered_at TIMESTAMPTZ`)
 	DB.Exec(`ALTER TABLE tournament_participants ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ`)
+
+	// Clan/raid tables added in v5
+	DB.Exec(`CREATE TABLE IF NOT EXISTS clans (
+		id          SERIAL PRIMARY KEY,
+		name        TEXT NOT NULL UNIQUE,
+		tag         TEXT NOT NULL UNIQUE,
+		description TEXT NOT NULL DEFAULT '',
+		rating      INT  NOT NULL DEFAULT 1000,
+		created_by  INT  NOT NULL REFERENCES users(id),
+		created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS clan_members (
+		clan_id   INT NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+		user_id   INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		role      TEXT NOT NULL DEFAULT 'member',
+		joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		PRIMARY KEY (clan_id, user_id),
+		CONSTRAINT one_clan_per_user UNIQUE (user_id)
+	)`)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS clan_messages (
+		id         SERIAL PRIMARY KEY,
+		clan_id    INT  NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+		user_id    INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		content    TEXT NOT NULL,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	)`)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS clan_message_reactions (
+		message_id INT  NOT NULL REFERENCES clan_messages(id) ON DELETE CASCADE,
+		user_id    INT  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		emoji      TEXT NOT NULL,
+		PRIMARY KEY (message_id, user_id, emoji)
+	)`)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS raids (
+		id                  SERIAL PRIMARY KEY,
+		initiating_clan_id  INT  NOT NULL REFERENCES clans(id),
+		scheduled_at        TIMESTAMPTZ NOT NULL,
+		status              TEXT NOT NULL DEFAULT 'upcoming',
+		question_count      INT  NOT NULL DEFAULT 0,
+		duration_minutes    INT  NOT NULL DEFAULT 0,
+		created_by          INT  NOT NULL REFERENCES users(id),
+		created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		CONSTRAINT raids_status_check
+			CHECK (status IN ('upcoming','active','completed'))
+	)`)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS raid_clans (
+		raid_id  INT NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+		clan_id  INT NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+		score    INT NOT NULL DEFAULT 0,
+		rank     INT,
+		PRIMARY KEY (raid_id, clan_id)
+	)`)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS raid_questions (
+		raid_id     INT NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+		question_id INT NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+		sort_order  INT NOT NULL DEFAULT 0,
+		PRIMARY KEY (raid_id, question_id)
+	)`)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS raid_submissions (
+		id           SERIAL PRIMARY KEY,
+		raid_id      INT NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+		clan_id      INT NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+		user_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		question_id  INT NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+		passed       BOOLEAN NOT NULL DEFAULT FALSE,
+		submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		UNIQUE (raid_id, user_id, question_id)
+	)`)
 
 	if err := SeedAdminUser(); err != nil {
 		log.Printf("admin seed: %v", err)
@@ -559,4 +710,3 @@ func SeedQuestions() error {
 	log.Printf("✓ Seeded %d questions", len(seeds))
 	return nil
 }
-
