@@ -210,6 +210,8 @@ func RegisterRoutes() {
 			HandleRaidArenaSubmit(w, r)
 		case strings.HasSuffix(path, "/leaderboard"):
 			HandleRaidLeaderboard(w, r)
+		case strings.HasSuffix(path, "/violation"):
+			HandleRaidViolation(w, r)
 		default:
 			HandleGetRaid(w, r)
 		}

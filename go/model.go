@@ -192,14 +192,17 @@ type ClanMember struct {
 }
 
 type ClanMessage struct {
-	ID        int                    `json:"id"`
-	ClanID    int                    `json:"clan_id"`
-	UserID    int                    `json:"user_id"`
-	UserName  string                 `json:"user_name"`
-	Role      string                 `json:"role"`
-	Content   string                 `json:"content"`
-	Reactions []ClanMessageReaction  `json:"reactions"`
-	CreatedAt time.Time              `json:"created_at"`
+	ID              int                   `json:"id"`
+	ClanID          int                   `json:"clan_id"`
+	UserID          int                   `json:"user_id"`
+	UserName        string                `json:"user_name"`
+	Role            string                `json:"role"`
+	Content         string                `json:"content"`
+	ReplyTo         *int                  `json:"reply_to,omitempty"`
+	ReplyToUserName string                `json:"reply_to_user_name,omitempty"`
+	ReplyToContent  string                `json:"reply_to_content,omitempty"`
+	Reactions       []ClanMessageReaction `json:"reactions"`
+	CreatedAt       time.Time             `json:"created_at"`
 }
 
 type ClanMessageReaction struct {

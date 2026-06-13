@@ -1,6 +1,7 @@
 package app
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -355,6 +356,7 @@ func reassignClanRoles(clanID int) {
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
 // GET /api/clans/{id}/chat?since={last_msg_id}
+// since=0 (or absent) → full history (up to 200 messages) so new members see everything.
 func HandleGetClanChat(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil {
@@ -384,14 +386,31 @@ func HandleGetClanChat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := DB.Query(`
-		SELECT m.id, m.clan_id, m.user_id, u.name, cm.role, m.content, m.created_at
-		FROM clan_messages m
-		JOIN users u ON u.id = m.user_id
-		JOIN clan_members cm ON cm.clan_id = m.clan_id AND cm.user_id = m.user_id
-		WHERE m.clan_id=$1 AND m.id > $2
-		ORDER BY m.id ASC
-		LIMIT 100`, id, since)
+	// since=0 means first load — fetch full history (last 200) so new members see all chats.
+	// Incremental polls use LIMIT 100 to pick up only new messages since last poll.
+	var rows *sql.Rows
+	var err error
+	if since == 0 {
+		rows, err = DB.Query(`
+			SELECT m.id, m.clan_id, m.user_id, u.name, cm.role, m.content,
+			       m.reply_to, m.created_at
+			FROM clan_messages m
+			JOIN users u ON u.id = m.user_id
+			JOIN clan_members cm ON cm.clan_id = m.clan_id AND cm.user_id = m.user_id
+			WHERE m.clan_id=$1
+			ORDER BY m.id ASC
+			LIMIT 200`, id)
+	} else {
+		rows, err = DB.Query(`
+			SELECT m.id, m.clan_id, m.user_id, u.name, cm.role, m.content,
+			       m.reply_to, m.created_at
+			FROM clan_messages m
+			JOIN users u ON u.id = m.user_id
+			JOIN clan_members cm ON cm.clan_id = m.clan_id AND cm.user_id = m.user_id
+			WHERE m.clan_id=$1 AND m.id > $2
+			ORDER BY m.id ASC
+			LIMIT 100`, id, since)
+	}
 	if err != nil {
 		http.Error(w, "db error", 500)
 		return
@@ -401,7 +420,22 @@ func HandleGetClanChat(w http.ResponseWriter, r *http.Request) {
 	var msgs []ClanMessage
 	for rows.Next() {
 		var m ClanMessage
-		rows.Scan(&m.ID, &m.ClanID, &m.UserID, &m.UserName, &m.Role, &m.Content, &m.CreatedAt)
+		rows.Scan(&m.ID, &m.ClanID, &m.UserID, &m.UserName, &m.Role, &m.Content,
+			&m.ReplyTo, &m.CreatedAt)
+		// Attach parent message snippet for reply threading
+		if m.ReplyTo != nil {
+			var parentUser, parentContent string
+			DB.QueryRow(`
+				SELECT u.name, m2.content
+				FROM clan_messages m2
+				JOIN users u ON u.id = m2.user_id
+				WHERE m2.id=$1`, *m.ReplyTo).Scan(&parentUser, &parentContent)
+			m.ReplyToUserName = parentUser
+			if len(parentContent) > 120 {
+				parentContent = parentContent[:120] + "…"
+			}
+			m.ReplyToContent = parentContent
+		}
 		m.Reactions = getMessageReactions(m.ID, u.ID)
 		msgs = append(msgs, m)
 	}
@@ -413,6 +447,7 @@ func HandleGetClanChat(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/clans/{id}/chat
+
 func HandleSendClanMessage(w http.ResponseWriter, r *http.Request) {
 	u := RequireAuth(w, r)
 	if u == nil {
@@ -435,6 +470,7 @@ func HandleSendClanMessage(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		Content string `json:"content"`
+		ReplyTo *int   `json:"reply_to,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid JSON", 400)
@@ -450,11 +486,22 @@ func HandleSendClanMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate reply_to if provided — must belong to the same clan
+	if body.ReplyTo != nil {
+		var exists bool
+		DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM clan_messages WHERE id=$1 AND clan_id=$2)`,
+			*body.ReplyTo, id).Scan(&exists)
+		if !exists {
+			http.Error(w, "reply_to message not found in this clan", 400)
+			return
+		}
+	}
+
 	var msgID int
 	err := DB.QueryRow(`
-		INSERT INTO clan_messages (clan_id, user_id, content)
-		VALUES ($1,$2,$3) RETURNING id`,
-		id, u.ID, body.Content,
+		INSERT INTO clan_messages (clan_id, user_id, content, reply_to)
+		VALUES ($1,$2,$3,$4) RETURNING id`,
+		id, u.ID, body.Content, body.ReplyTo,
 	).Scan(&msgID)
 	if err != nil {
 		http.Error(w, "failed to send message", 500)

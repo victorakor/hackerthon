@@ -384,6 +384,17 @@ func createTables() error {
 		log.Printf("admin seed: %v", err)
 	}
 
+	// v6 — chat reply threading + raid anti-cheat
+	DB.Exec(`ALTER TABLE clan_messages ADD COLUMN IF NOT EXISTS reply_to INT REFERENCES clan_messages(id) ON DELETE SET NULL`)
+	DB.Exec(`CREATE TABLE IF NOT EXISTS raid_violations (
+		raid_id    INT NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+		user_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		clan_id    INT NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+		count      INT NOT NULL DEFAULT 0,
+		disqualified BOOLEAN NOT NULL DEFAULT FALSE,
+		PRIMARY KEY (raid_id, user_id)
+	)`)
+
 	var count int
 	DB.QueryRow(`SELECT COUNT(*) FROM questions`).Scan(&count)
 	if count == 0 {

@@ -27,6 +27,11 @@ async function initRaidArena(raidID) {
     _raidEndsAt    = data.ends_at;
 
     _renderRaidArena(data);
+
+  // Enable contest-mode anti-cheat (blocks copy/paste, tab-switch)
+  if (typeof AntiCheat !== 'undefined') {
+    AntiCheat.start('raid', raidID);
+  }
   } catch (e) {
     showToast('Network error entering raid arena.', 'error');
   }
@@ -121,6 +126,7 @@ function _startRaidCountdown() {
       el.style.display = '';
       clearInterval(_raidCountdownHandle);
       showToast('Raid has ended!', 'success');
+      if (typeof AntiCheat !== 'undefined') AntiCheat.stop();
       // Exit directly — no confirm modal needed since the raid is already over.
       setTimeout(function() {
         currentQuestion = null;
@@ -300,6 +306,7 @@ function _raidArenaExit() {
       currentQuestion = null;
       if (_raidCountdownHandle) clearInterval(_raidCountdownHandle);
       if (_raidScorePollHandle) clearInterval(_raidScorePollHandle);
+      if (typeof AntiCheat !== 'undefined') AntiCheat.stop();
       _raidArenaId = null;
       _raidQuestions = [];
       _raidCurrentQ = null;

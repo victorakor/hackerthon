@@ -414,6 +414,98 @@ func HandleRaidLeaderboard(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(scores)
 }
 
+// POST /api/raids/{id}/violation
+// Called by AntiCheat.js when a copy/paste or tab-switch event fires during a raid.
+func HandleRaidViolation(w http.ResponseWriter, r *http.Request) {
+	u := RequireAuth(w, r)
+	if u == nil {
+		return
+	}
+	id := parseIDFromPath(r.URL.Path, "/api/raids/", "/violation")
+	if id == 0 {
+		http.Error(w, "invalid raid id", 400)
+		return
+	}
+
+	// Raid must be active
+	var status string
+	var scheduledAt time.Time
+	var durationMinutes int
+	err := DB.QueryRow(`SELECT status, scheduled_at, duration_minutes FROM raids WHERE id=$1`, id).
+		Scan(&status, &scheduledAt, &durationMinutes)
+	if err != nil {
+		http.Error(w, "raid not found", 404)
+		return
+	}
+	if status != "active" {
+		http.Error(w, "raid is not active", 409)
+		return
+	}
+	if time.Now().UTC().After(EndsAt(scheduledAt, durationMinutes)) {
+		http.Error(w, "raid has already ended", 409)
+		return
+	}
+
+	// User must be in a participating clan
+	var myClanID int
+	DB.QueryRow(`SELECT clan_id FROM clan_members WHERE user_id=$1`, u.ID).Scan(&myClanID)
+	if myClanID == 0 {
+		http.Error(w, "you are not in a clan", 403)
+		return
+	}
+	var inRaid bool
+	DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM raid_clans WHERE raid_id=$1 AND clan_id=$2)`,
+		id, myClanID).Scan(&inRaid)
+	if !inRaid {
+		http.Error(w, "your clan is not part of this raid", 403)
+		return
+	}
+
+	var body struct {
+		Type string `json:"type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid JSON", 400)
+		return
+	}
+
+	// Upsert violation row then increment
+	DB.Exec(`
+		INSERT INTO raid_violations (raid_id, user_id, clan_id, count)
+		VALUES ($1,$2,$3,0)
+		ON CONFLICT (raid_id, user_id) DO NOTHING`,
+		id, u.ID, myClanID)
+
+	// Instant disqualification on logout (tab close / navigate away)
+	if body.Type == "logout" {
+		DB.Exec(`
+			UPDATE raid_violations SET disqualified=TRUE
+			WHERE raid_id=$1 AND user_id=$2`, id, u.ID)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"disqualified": true, "violation_count": 2})
+		return
+	}
+
+	var newCount int
+	DB.QueryRow(`
+		UPDATE raid_violations SET count=count+1
+		WHERE raid_id=$1 AND user_id=$2
+		RETURNING count`, id, u.ID).Scan(&newCount)
+
+	disqualified := newCount >= 2
+	if disqualified {
+		DB.Exec(`
+			UPDATE raid_violations SET disqualified=TRUE
+			WHERE raid_id=$1 AND user_id=$2`, id, u.ID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"violation_count": newCount,
+		"disqualified":    disqualified,
+	})
+}
+
 // ── Raid DB helpers ───────────────────────────────────────────────────────────
 
 func getRaidDetail(raidID int) (*RaidDetail, error) {

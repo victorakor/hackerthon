@@ -972,6 +972,94 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
   border-color: var(--accent);
 }
 
+/* ── Reply bar (shows above the input when replying to a message) ── */
+.clan-chat-reply-bar {
+  background: var(--surface2, #1e2130);
+  border-left: 3px solid var(--accent);
+  padding: 6px 10px;
+  margin: 0 0 4px;
+  border-radius: 4px;
+}
+.clan-reply-bar-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.clan-reply-bar-label {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.clan-reply-bar-preview {
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clan-reply-bar-cancel {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 0 4px;
+  line-height: 1;
+}
+.clan-reply-bar-cancel:hover { color: var(--text); }
+
+/* ── Inline reply quote inside a message ── */
+.clan-msg-reply-quote {
+  background: var(--surface2, #1a1e2e);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  overflow: hidden;
+}
+.clan-msg-reply-quote:hover { opacity: 0.8; }
+.clan-msg-reply-author {
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.clan-msg-reply-preview {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Reply button on hover ── */
+.clan-msg-reply-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 0 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: auto;
+}
+.clan-msg:hover .clan-msg-reply-btn { opacity: 1; }
+.clan-msg-reply-btn:hover { color: var(--accent); }
+
+/* ── Highlight flash when jumping to a quoted message ── */
+@keyframes clan-msg-flash {
+  0%   { background: rgba(var(--accent-rgb, 99,102,241), 0.25); }
+  100% { background: transparent; }
+}
+.clan-msg-highlight {
+  animation: clan-msg-flash 1.5s ease-out forwards;
+  border-radius: 6px;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    RAIDS
    ══════════════════════════════════════════════════════════════════════════ */

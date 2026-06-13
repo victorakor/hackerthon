@@ -4,6 +4,10 @@ var _clanChatState = {
   clanID: null,
   lastMsgID: 0,
   pollHandle: null,
+  visibilityHandle: null,
+  replyToID: null,
+  replyToUser: null,
+  replyToContent: null,
   reactionEmojis: ['👍', '🔥', '💀', '✅', '🤝', '⚔️']
 };
 
@@ -13,6 +17,10 @@ function initClanChat(clanID) {
     _clanChatState.clanID = clanID;
     _clanChatState.lastMsgID = 0;
   }
+  _clanChatState.replyToID = null;
+  _clanChatState.replyToUser = null;
+  _clanChatState.replyToContent = null;
+
   stopClanChatPoll();
 
   var mount = document.getElementById('chat-mount');
@@ -22,6 +30,7 @@ function initClanChat(clanID) {
       <div id="clan-chat-messages" class="clan-chat-messages">
         <div class="clan-loading">Loading chat…</div>
       </div>
+      <div id="clan-chat-reply-bar" class="clan-chat-reply-bar" style="display:none"></div>
       <div class="clan-chat-input-row">
         <textarea id="clan-chat-input" class="clan-chat-input" placeholder="Share code, plan a raid… (use \`\`\` for code blocks)" rows="2" maxlength="2000"></textarea>
         <button class="btn-clan-send" onclick="sendClanChatMessage()">Send</button>
@@ -34,7 +43,24 @@ function initClanChat(clanID) {
       e.preventDefault();
       sendClanChatMessage();
     }
+    // Clear reply on Escape
+    if (e.key === 'Escape') {
+      clearReply();
+    }
   });
+
+  // Re-load full chat when the user switches back to this tab — fixes the
+  // "only shows on reload" bug caused by the poll being cleared on tab change
+  // and the container never re-rendering on first click back.
+  if (_clanChatState.visibilityHandle) {
+    document.removeEventListener('visibilitychange', _clanChatState.visibilityHandle);
+  }
+  _clanChatState.visibilityHandle = function() {
+    if (document.visibilityState === 'visible' && _clanChatState.clanID === clanID) {
+      loadClanChat(false);
+    }
+  };
+  document.addEventListener('visibilitychange', _clanChatState.visibilityHandle);
 
   loadClanChat(true);
   _clanChatState.pollHandle = setInterval(function() {
@@ -47,13 +73,20 @@ function stopClanChatPoll() {
     clearInterval(_clanChatState.pollHandle);
     _clanChatState.pollHandle = null;
   }
+  if (_clanChatState.visibilityHandle) {
+    document.removeEventListener('visibilitychange', _clanChatState.visibilityHandle);
+    _clanChatState.visibilityHandle = null;
+  }
 }
 
 function loadClanChat(initial) {
   var clanID = _clanChatState.clanID;
   if (!clanID) return;
 
-  apiFetch('/api/clans/' + clanID + '/chat?since=' + _clanChatState.lastMsgID)
+  // initial load OR after a tab re-focus passes since=0 to get full history
+  var since = initial ? 0 : _clanChatState.lastMsgID;
+
+  apiFetch('/api/clans/' + clanID + '/chat?since=' + since)
     .then(function(r) { return r.json(); })
     .then(function(msgs) {
       var container = document.getElementById('clan-chat-messages');
@@ -63,15 +96,17 @@ function loadClanChat(initial) {
         container.innerHTML = '<div class="clan-empty">No messages yet. Say hello to your clan!</div>';
         return;
       }
-      if (initial) {
-        container.innerHTML = '';
-      }
       if (!msgs || msgs.length === 0) return;
 
       var wasAtBottom = isScrolledToBottom(container);
       if (initial) container.innerHTML = '';
 
       msgs.forEach(function(m) {
+        // Avoid duplicating messages that arrived via poll between initial fetches
+        if (document.querySelector('[data-msg-id="' + m.id + '"]')) {
+          if (m.id > _clanChatState.lastMsgID) _clanChatState.lastMsgID = m.id;
+          return;
+        }
         container.insertAdjacentHTML('beforeend', renderClanMessage(m));
         if (m.id > _clanChatState.lastMsgID) _clanChatState.lastMsgID = m.id;
       });
@@ -96,13 +131,26 @@ function renderClanMessage(m) {
   var isMe = currentUser && m.user_id === currentUser.id;
   var bubbleClass = isMe ? 'clan-msg clan-msg-me' : 'clan-msg';
   var reactionsHtml = renderReactions(m.id, m.reactions || []);
+
+  // Reply-to quote banner
+  var replyBannerHtml = '';
+  if (m.reply_to && m.reply_to_user_name) {
+    replyBannerHtml = `
+      <div class="clan-msg-reply-quote" onclick="_scrollToMessage(${m.reply_to})">
+        <span class="clan-msg-reply-author">↩ ${escHtml(m.reply_to_user_name)}</span>
+        <span class="clan-msg-reply-preview">${escHtml(m.reply_to_content || '')}</span>
+      </div>`;
+  }
+
   return `
     <div class="${bubbleClass}" data-msg-id="${m.id}">
       <div class="clan-msg-meta">
         <span class="clan-role-badge ${m.role}">${roleBadge(m.role)}</span>
         <span class="clan-msg-author">${escHtml(m.user_name)}</span>
         <span class="clan-msg-time">${timeAgo(m.created_at)}</span>
+        <button class="clan-msg-reply-btn" onclick="startReply(${m.id}, '${escHtml(m.user_name).replace(/'/g,"\\'")}', '${escHtml((m.content||'').substring(0,80)).replace(/'/g,"\\'")}')">↩ Reply</button>
       </div>
+      ${replyBannerHtml}
       <div class="clan-msg-content">${renderMessageContent(m.content)}</div>
       <div class="clan-msg-actions">
         ${reactionsHtml}
@@ -117,6 +165,45 @@ function renderClanMessage(m) {
       </div>
     </div>
   `;
+}
+
+// ── Reply threading ───────────────────────────────────────────────────────────
+
+function startReply(msgID, authorName, contentPreview) {
+  _clanChatState.replyToID = msgID;
+  _clanChatState.replyToUser = authorName;
+  _clanChatState.replyToContent = contentPreview;
+
+  var bar = document.getElementById('clan-chat-reply-bar');
+  if (bar) {
+    bar.style.display = '';
+    bar.innerHTML = `
+      <div class="clan-reply-bar-inner">
+        <span class="clan-reply-bar-label">Replying to <strong>${escHtml(authorName)}</strong></span>
+        <span class="clan-reply-bar-preview">${escHtml(contentPreview)}</span>
+        <button class="clan-reply-bar-cancel" onclick="clearReply()">✕</button>
+      </div>`;
+  }
+
+  var input = document.getElementById('clan-chat-input');
+  if (input) input.focus();
+}
+
+function clearReply() {
+  _clanChatState.replyToID = null;
+  _clanChatState.replyToUser = null;
+  _clanChatState.replyToContent = null;
+  var bar = document.getElementById('clan-chat-reply-bar');
+  if (bar) { bar.style.display = 'none'; bar.innerHTML = ''; }
+}
+
+function _scrollToMessage(msgID) {
+  var el = document.querySelector('[data-msg-id="' + msgID + '"]');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('clan-msg-highlight');
+    setTimeout(function() { el.classList.remove('clan-msg-highlight'); }, 1500);
+  }
 }
 
 // Render message content — supports ```code blocks``` and plain text
@@ -198,11 +285,16 @@ function sendClanChatMessage() {
   var content = input.value.trim();
   if (!content) return;
 
+  var payload = { content: content };
+  if (_clanChatState.replyToID) {
+    payload.reply_to = _clanChatState.replyToID;
+  }
+
   input.disabled = true;
   apiFetch('/api/clans/' + clanID + '/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: content })
+    body: JSON.stringify(payload)
   })
     .then(function(r) {
       if (!r.ok) return r.text().then(function(t) { throw new Error(t); });
@@ -211,6 +303,7 @@ function sendClanChatMessage() {
     .then(function() {
       input.value = '';
       input.disabled = false;
+      clearReply();
       loadClanChat(false);
     })
     .catch(function(e) {
