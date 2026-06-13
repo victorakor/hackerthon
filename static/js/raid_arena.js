@@ -121,10 +121,9 @@ function _startRaidCountdown() {
       el.style.display = '';
       clearInterval(_raidCountdownHandle);
       showToast('Raid has ended!', 'success');
+      // Exit directly — no confirm modal needed since the raid is already over.
       setTimeout(function() {
-        // Auto-exit directly — no confirm modal needed since raid is already over
         currentQuestion = null;
-        if (_raidCountdownHandle) clearInterval(_raidCountdownHandle);
         if (_raidScorePollHandle) clearInterval(_raidScorePollHandle);
         _raidArenaId = null;
         _raidQuestions = [];

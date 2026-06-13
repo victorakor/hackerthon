@@ -296,29 +296,31 @@ func FormatContestPayload(contestType string, id int, scheduledAt time.Time, dur
 func tickRaids() {
 	now := time.Now().UTC()
 
-	// 1. upcoming raids whose scheduled_at has arrived → activate
-	// Collect IDs first, close cursor, THEN activate (avoids nested open cursors)
+	// 1. upcoming raids whose scheduled_at has arrived → collect IDs, then activate
+	// We collect first and close the cursor before calling activateRaid, which itself
+	// opens multiple DB queries. Leaving the outer rows open during those nested queries
+	// can exhaust the connection pool or trigger driver-level errors.
 	rows, err := DB.Query(`
-		SELECT id FROM raids
+		SELECT id, initiating_clan_id FROM raids
 		WHERE status = 'upcoming' AND scheduled_at <= $1`, now)
 	if err != nil {
 		log.Printf("raid engine: query upcoming raids: %v", err)
 		return
 	}
-	var toActivate []int
+	type raidEntry struct{ id, initiatingClanID int }
+	var toActivate []raidEntry
 	for rows.Next() {
-		var id int
-		rows.Scan(&id)
-		toActivate = append(toActivate, id)
+		var e raidEntry
+		rows.Scan(&e.id, &e.initiatingClanID)
+		toActivate = append(toActivate, e)
 	}
-	rows.Close() // close BEFORE calling activateRaid
+	rows.Close() // close before activating — each activation opens its own queries
 
-	for _, id := range toActivate {
-		activateRaid(id)
+	for _, e := range toActivate {
+		activateRaid(e.id)
 	}
 
-	// 2. active raids past their duration → complete
-	// Same pattern: collect, close, then act
+	// 2. active raids past their duration → collect IDs, then complete
 	rows2, err := DB.Query(`
 		SELECT id FROM raids
 		WHERE status = 'active'
@@ -333,7 +335,7 @@ func tickRaids() {
 		rows2.Scan(&id)
 		toComplete = append(toComplete, id)
 	}
-	rows2.Close() // close BEFORE calling completeRaid
+	rows2.Close() // close before completing
 
 	for _, id := range toComplete {
 		completeRaid(id)
@@ -361,9 +363,12 @@ func activateRaid(raidID int) {
 	// Duration: 12 minutes per question
 	durationMinutes := questionCount * 12
 
-	// Randomly select questions from visible pool
+	// Randomly select questions from visible pool.
 	// Weight toward medium/hard by ordering: hard first, then medium, then easy,
-	// with random shuffle within each tier via RANDOM()
+	// with random shuffle within each tier via RANDOM().
+	// Collect IDs then close the cursor BEFORE running INSERT/UPDATE below —
+	// leaving a SELECT cursor open while executing writes can trigger driver-level
+	// errors on some PostgreSQL connection configurations.
 	rows, err := DB.Query(`
 		SELECT id FROM questions
 		WHERE visible = TRUE
@@ -379,17 +384,17 @@ func activateRaid(raidID int) {
 		log.Printf("raid engine: select questions for raid %d: %v", raidID, err)
 		return
 	}
-	defer rows.Close()
-
 	var questionIDs []int
 	for rows.Next() {
 		var qid int
 		rows.Scan(&qid)
 		questionIDs = append(questionIDs, qid)
 	}
+	rows.Close() // close before INSERT/UPDATE statements
 
 	if len(questionIDs) == 0 {
-		log.Printf("raid engine: no visible questions for raid %d — marking completed to prevent retry loop", raidID)
+		// Mark completed so the engine doesn't retry this raid every 30 seconds forever.
+		log.Printf("raid engine: no visible questions for raid %d — marking completed", raidID)
 		DB.Exec(`UPDATE raids SET status='completed' WHERE id=$1`, raidID)
 		return
 	}
@@ -425,7 +430,7 @@ func activateRaid(raidID int) {
 }
 
 func completeRaid(raidID int) {
-	// Rank clans by final score
+	// Rank clans by final score — collect first, close cursor, then write.
 	rows, err := DB.Query(`
 		SELECT clan_id, score FROM raid_clans
 		WHERE raid_id=$1
@@ -434,14 +439,13 @@ func completeRaid(raidID int) {
 		log.Printf("raid engine: rank clans for raid %d: %v", raidID, err)
 		return
 	}
-	defer rows.Close()
-
 	var clans []raidClanRankEntry
 	for rows.Next() {
 		var cs raidClanRankEntry
 		rows.Scan(&cs.clanID, &cs.score)
 		clans = append(clans, cs)
 	}
+	rows.Close() // close before UPDATE statements below
 
 	// Assign ranks and apply Elo adjustments
 	for i, cs := range clans {
