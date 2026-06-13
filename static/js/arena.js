@@ -49,12 +49,15 @@ function _initArenaQuestionList(type, contestId, questions) {
   _arenaSolvedIds   = new Set();
 }
 
-// Select a question inside the arena.
+// Select a question inside the arena — renders full detail with editor, hints, AI hint.
 function _arenaSelectQuestion(qid) {
   _arenaCurrentQ = _arenaQuestions.find(function(q) { return q.id === qid; });
   if (!_arenaCurrentQ) return;
 
-  // Highlight active item
+  // Keep currentQuestion in sync so hint.js works correctly
+  currentQuestion = _arenaCurrentQ;
+
+  // Highlight active item in sidebar
   document.querySelectorAll('.arena-q-item').forEach(function(el) { el.classList.remove('active'); });
   var item = document.getElementById('arena-q-' + qid);
   if (item) item.classList.add('active');
@@ -62,6 +65,7 @@ function _arenaSelectQuestion(qid) {
   var q = _arenaCurrentQ;
   var isSolved = _arenaSolvedIds.has(qid);
 
+  // Test info badge
   var testInfoHtml = '';
   if (q.test_file && q.test_file.trim() !== '') {
     testInfoHtml = '<span class="go-test-badge">🧪 Go test file</span>';
@@ -75,6 +79,7 @@ function _arenaSelectQuestion(qid) {
 
   var detail = document.getElementById('arena-detail');
   detail.innerHTML =
+    // ── Question card ──────────────────────────────────────────────────────
     '<div class="detail-card">' +
       '<div class="detail-header">' +
         '<div class="detail-title-group">' +
@@ -86,17 +91,34 @@ function _arenaSelectQuestion(qid) {
             (isSolved ? '<span class="badge badge-solved">✓ Solved</span>' : '') +
           '</div>' +
         '</div>' +
+        '<div class="detail-actions">' +
+          '<button class="btn-action btn-hint" onclick="toggleArenaHint()">💡 Hint</button>' +
+          '<button class="btn-action btn-ai-hint" id="ai-hint-btn" onclick="requestAiHint(' + q.id + ')">' +
+            '🤖 AI Hint <span class="ai-hint-badge" id="ai-hint-badge">⌛</span>' +
+          '</button>' +
+        '</div>' +
       '</div>' +
       '<div class="detail-body">' +
         '<div class="detail-description">' + escHtml(q.description) + '</div>' +
-        '<div class="detail-hint" id="arena-hint-box">' +
+        // Static hint (toggled by button)
+        '<div class="detail-hint" id="hint-box" style="display:none">' +
           '<div class="hint-label">💡 Hint</div>' +
           '<div class="hint-text">' + escHtml(q.hint_text) + ' — ' +
             '<a class="hint-link" href="' + escHtml(q.hint_url) + '" target="_blank" rel="noopener">Open docs ↗</a>' +
           '</div>' +
         '</div>' +
+        // AI hint output panel
+        '<div class="ai-hint-panel" id="ai-hint-panel" style="display:none">' +
+          '<div class="ai-hint-header">' +
+            '<span class="ai-hint-label">🤖 AI Nudge</span>' +
+            '<button class="ai-hint-close" onclick="document.getElementById(\'ai-hint-panel\').style.display=\'none\'">✕</button>' +
+          '</div>' +
+          '<div class="ai-hint-text" id="ai-hint-text"></div>' +
+        '</div>' +
       '</div>' +
     '</div>' +
+
+    // ── Code editor + submit ───────────────────────────────────────────────
     '<div>' +
       '<div class="section-title">Submit Solution</div>' +
       '<div class="submit-form">' +
@@ -124,21 +146,18 @@ function _arenaSelectQuestion(qid) {
       '</div>' +
     '</div>';
 
-  // Boot editor
-  if (typeof initCodeEditor === 'function') initCodeEditor();
+  // Boot the CodeMirror editor
+  initCodeEditor();
 
-  // Show hint toggle
-  var hintBox = document.getElementById('arena-hint-box');
-  if (hintBox) {
-    hintBox.style.display = 'none';
-    // Add toggle button
-    var hintBtn = document.createElement('button');
-    hintBtn.className = 'btn-action btn-hint';
-    hintBtn.innerHTML = '💡 Hint';
-    hintBtn.onclick = function() { hintBox.classList.toggle('visible'); hintBox.style.display = ''; };
-    var header = detail.querySelector('.detail-actions') || detail.querySelector('.detail-header');
-    if (header) header.appendChild(hintBtn);
-  }
+  // Load AI hint status for this question
+  if (typeof initHintStatus === 'function') initHintStatus(q.id);
+}
+
+// Toggle static hint box in arena.
+function toggleArenaHint() {
+  var box = document.getElementById('hint-box');
+  if (!box) return;
+  box.style.display = (box.style.display === 'none' || box.style.display === '') ? 'block' : 'none';
 }
 
 // Called from the arena submit button.
@@ -190,11 +209,10 @@ async function _arenaSubmit(qid) {
 
     if (data.passed) {
       _arenaSolvedIds.add(qid);
-      // Mark solved in the question list
       var statusEl = document.getElementById('arena-qs-' + qid);
       if (statusEl) { statusEl.textContent = '✓'; statusEl.style.color = 'var(--easy)'; }
-      var item = document.getElementById('arena-q-' + qid);
-      if (item) item.classList.add('completed');
+      var listItem = document.getElementById('arena-q-' + qid);
+      if (listItem) listItem.classList.add('completed');
       showToast('✅ Question solved!', 'success');
     } else {
       showToast('Tests did not all pass. Keep trying!', 'error');
@@ -239,6 +257,7 @@ function _arenaExit() {
     'Exiting the arena does not end the challenge — you can re-enter while time remains. Your progress is saved.',
     'Exit',
     function() {
+      currentQuestion = null;
       if (_arenaContestType === 'challenge') {
         _exitChallengeArena(null);
       } else {

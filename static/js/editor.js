@@ -4,18 +4,14 @@ var _cmEditor = null;
 // ─── Per-language keyword lists ───────────────────────────────────────────────
 var LANG_KEYWORDS = {
   go: [
-    // keywords
     'break','case','chan','const','continue','default','defer','else','fallthrough',
     'for','func','go','goto','if','import','interface','map','package','range',
     'return','select','struct','switch','type','var',
-    // builtins
     'append','cap','close','complex','copy','delete','imag','len','make','new',
     'panic','print','println','real','recover',
-    // common types
     'bool','byte','complex64','complex128','error','float32','float64',
     'int','int8','int16','int32','int64','rune','string',
     'uint','uint8','uint16','uint32','uint64','uintptr',
-    // common stdlib
     'fmt.Println','fmt.Printf','fmt.Sprintf','fmt.Errorf','fmt.Scanf','fmt.Scan',
     'fmt.Print','fmt.Fprintf','fmt.Sscanf',
     'os.Exit','os.Args','os.Stdin','os.Stdout','os.Stderr',
@@ -30,7 +26,6 @@ var LANG_KEYWORDS = {
     'continue','def','del','elif','else','except','finally','for','from',
     'global','if','import','in','is','lambda','nonlocal','not','or','pass',
     'raise','return','try','while','with','yield',
-    // builtins
     'abs','all','any','bin','bool','breakpoint','bytearray','bytes','callable',
     'chr','classmethod','compile','complex','delattr','dict','dir','divmod',
     'enumerate','eval','exec','filter','float','format','frozenset','getattr',
@@ -39,7 +34,6 @@ var LANG_KEYWORDS = {
     'next','object','oct','open','ord','pow','print','property','range',
     'repr','reversed','round','set','setattr','slice','sorted','staticmethod',
     'str','sum','super','tuple','type','vars','zip',
-    // common imports
     'import os','import sys','import math','import json','import re',
     'from collections import','from itertools import',
   ],
@@ -48,7 +42,6 @@ var LANG_KEYWORDS = {
     'delete','do','else','export','extends','finally','for','function','if',
     'import','in','instanceof','let','new','return','static','super','switch',
     'this','throw','try','typeof','var','void','while','with','yield',
-    // builtins
     'Array','Boolean','Date','Error','Function','JSON','Math','Number','Object',
     'Promise','RegExp','Set','Map','String','Symbol',
     'console.log','console.error','console.warn',
@@ -68,7 +61,6 @@ var LANG_KEYWORDS = {
   ],
 };
 
-// Merge language keywords with words already in the document
 function buildHinter(lang) {
   var keywords = LANG_KEYWORDS[lang] || [];
   return function(cm) {
@@ -81,7 +73,6 @@ function buildHinter(lang) {
     var wordLower = word.toLowerCase();
     var seen = new Set(anyword.list);
 
-    // Prepend matching keywords (exact prefix match, case-insensitive)
     var kwMatches = keywords.filter(function(k) {
       return k.toLowerCase().indexOf(wordLower) === 0 && !seen.has(k);
     });
@@ -98,98 +89,109 @@ function buildHinter(lang) {
 }
 
 function initCodeEditor() {
-  _cmEditor = null;
+  // ── Destroy the previous instance cleanly before doing anything else ──────
+  // Without this, switching questions leaves a ghost instance attached to the
+  // old (now-replaced) DOM node. CodeMirror then refuses to mount again into
+  // the new node because _cmEditor still points at a live instance.
+  if (_cmEditor) {
+    try { _cmEditor.toTextArea(); } catch(e) {}
+    _cmEditor = null;
+  }
 
+  // Clear the container so CodeMirror gets a fresh empty div to work with
   var existing = document.getElementById('sub-code-editor');
   if (existing) existing.innerHTML = '';
 
-  setTimeout(function() {
-    var target = document.getElementById('sub-code-editor');
-    if (!target || !window.CodeMirror) return;
-    if (target.closest('#detail-pane') === null) return;
+  // Use requestAnimationFrame + a small delay so the browser has fully painted
+  // the new question detail HTML before CodeMirror measures the container.
+  // setTimeout(0) is not enough — the layout hasn't been flushed yet, so
+  // CodeMirror mounts with zero height and never shows on question 2+.
+  requestAnimationFrame(function() {
+    setTimeout(function() {
+      var target = document.getElementById('sub-code-editor');
+      // Works in both #detail-pane (questions tab) and #arena-detail (arena)
+      if (!target || !window.CodeMirror) return;
 
-    var langEl = document.getElementById('sub-lang');
-    var initialLang = langEl ? langEl.value : 'go';
+      var langEl = document.getElementById('sub-lang');
+      var initialLang = langEl ? langEl.value : 'go';
 
-    _cmEditor = CodeMirror(target, {
-      value: '',
-      mode: langToMode(initialLang),
-      theme: 'dracula',
-      lineNumbers: true,
-      indentUnit: 4,
-      tabSize: 4,
-      indentWithTabs: true,
-      matchBrackets: true,
-      autoCloseBrackets: true,
-      lineWrapping: false,
-      autofocus: true,
-      hintOptions: {
-        completeSingle: false,   // don't auto-insert when only 1 match
-        alignWithWord: true,
-        hint: buildHinter(initialLang),
-      },
-      extraKeys: {
-        Tab: function(cm) {
-          if (cm.somethingSelected()) {
-            cm.indentSelection('add');
-          } else {
-            // If hint list is open, pick the selection; otherwise indent
-            if (cm.state.completionActive) {
-              cm.state.completionActive.widget && CodeMirror.commands.pickCompletion(cm);
+      _cmEditor = CodeMirror(target, {
+        value: '',
+        mode: langToMode(initialLang),
+        theme: 'dracula',
+        lineNumbers: true,
+        indentUnit: 4,
+        tabSize: 4,
+        indentWithTabs: true,
+        matchBrackets: true,
+        autoCloseBrackets: true,
+        lineWrapping: false,
+        autofocus: true,
+        hintOptions: {
+          completeSingle: false,
+          alignWithWord: true,
+          hint: buildHinter(initialLang),
+        },
+        extraKeys: {
+          Tab: function(cm) {
+            if (cm.somethingSelected()) {
+              cm.indentSelection('add');
             } else {
-              cm.replaceSelection('    ', 'end');
+              if (cm.state.completionActive) {
+                cm.state.completionActive.widget && CodeMirror.commands.pickCompletion(cm);
+              } else {
+                cm.replaceSelection('    ', 'end');
+              }
             }
+          },
+          'Shift-Tab': function(cm) { cm.indentSelection('subtract'); },
+          'Ctrl-Space': function(cm) {
+            CodeMirror.commands.autocomplete(cm, null, {completeSingle: false});
+          },
+        }
+      });
+
+      _cmEditor.setSize('100%', '340px');
+      // refresh() forces CodeMirror to re-measure the container and render
+      // all lines — critical after a DOM swap
+      _cmEditor.refresh();
+
+      // Auto-trigger completions after each printable character (debounced)
+      var hintTimer = null;
+      _cmEditor.on('change', function(cm, change) {
+        if (change.origin === '+delete' || change.origin === 'paste') return;
+        var typed = change.text && change.text[0];
+        if (!typed || !/\w/.test(typed)) return;
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(function() {
+          if (!cm.state.completionActive) {
+            cm.showHint({completeSingle: false, hint: buildHinter(cm._currentLang || 'go')});
           }
-        },
-        'Shift-Tab': function(cm) {
-          cm.indentSelection('subtract');
-        },
-        'Ctrl-Space': function(cm) {
-          CodeMirror.commands.autocomplete(cm, null, {completeSingle: false});
-        },
+        }, 200);
+      });
+
+      // Sync language dropdown → CodeMirror mode
+      if (langEl) {
+        _cmEditor._currentLang = langEl.value;
+        _cmEditor.setOption('mode', langToMode(langEl.value));
+        _cmEditor.setOption('hintOptions', {
+          completeSingle: false,
+          hint: buildHinter(langEl.value),
+        });
+
+        langEl.addEventListener('change', function() {
+          if (_cmEditor) {
+            _cmEditor._currentLang = langEl.value;
+            _cmEditor.setOption('mode', langToMode(langEl.value));
+            _cmEditor.setOption('hintOptions', {
+              completeSingle: false,
+              hint: buildHinter(langEl.value),
+            });
+          }
+        });
       }
-    });
-
-    _cmEditor.setSize('100%', '340px');
-    _cmEditor.refresh();
-
-    // Auto-trigger completions after each printable character (debounced)
-    var hintTimer = null;
-    _cmEditor.on('change', function(cm, change) {
-      if (change.origin === '+delete' || change.origin === 'paste') return;
-      var typed = change.text && change.text[0];
-      // Only trigger on word characters; skip spaces, braces, etc.
-      if (!typed || !/\w/.test(typed)) return;
-
-      clearTimeout(hintTimer);
-      hintTimer = setTimeout(function() {
-        if (!cm.state.completionActive) {
-          cm.showHint({completeSingle: false, hint: buildHinter(cm._currentLang || 'go')});
-        }
-      }, 200);
-    });
-
-    // Sync language dropdown
-    if (langEl) {
-      _cmEditor._currentLang = langEl.value;
-      _cmEditor.setOption('mode', langToMode(langEl.value));
-      _cmEditor.setOption('hintOptions', {
-        completeSingle: false,
-        hint: buildHinter(langEl.value),
-      });
-
-      langEl.addEventListener('change', function() {
-        if (_cmEditor) {
-          _cmEditor._currentLang = langEl.value;
-          _cmEditor.setOption('mode', langToMode(langEl.value));
-          _cmEditor.setOption('hintOptions', {
-            completeSingle: false,
-            hint: buildHinter(langEl.value),
-          });
-        }
-      });
-    }
-  }, 0);
+    }, 50);
+  });
 }
 
 function langToMode(lang) {
