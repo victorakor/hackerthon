@@ -216,6 +216,12 @@ textarea.form-input{resize:vertical;min-height:140px;font-size:12px;line-height:
 
 /* ── ADMIN ── */
 .admin-page{padding:24px 0;display:grid;grid-template-columns:1fr 1fr;gap:24px}
+/* #challenge-list and #tournament-list reuse .admin-page as their wrapper, but
+   they also render the full-width arena panel (with the CodeMirror editor) once
+   the user enters a challenge/tournament. Being a single grid item confines them
+   (and the editor inside) to one ~half-width column. Span both columns so the
+   card list AND the arena render at full width, matching the Questions tab. */
+#challenge-list, #tournament-list{grid-column:1/-1}
 .admin-section{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
 .admin-section-title{padding:16px 20px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent)}
 .admin-list{padding:0;max-height:400px;overflow-y:auto}
